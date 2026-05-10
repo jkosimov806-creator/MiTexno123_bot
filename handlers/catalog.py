@@ -6,7 +6,6 @@ import urllib.parse
 
 
 async def show_catalog_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает список категорий"""
     query = update.callback_query
     await query.answer()
 
@@ -19,10 +18,9 @@ async def show_catalog_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     keyboard = []
 
     for cat in categories:
-        # защита от кривых типов
         cat_str = str(cat)
 
-        # безопасная кодировка (ВАЖНО)
+        # защита от крашей Telegram
         safe_cat = urllib.parse.quote(cat_str)
 
         keyboard.append([
@@ -57,27 +55,4 @@ async def show_category_products(update: Update, context: ContextTypes.DEFAULT_T
             query,
             "В этой категории пока нет товаров.",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("⬅️ Назад", callback_data="show_catalog")]
-            ])
-        )
-        return
-
-    if current_index >= len(products):
-        current_index = 0
-    elif current_index < 0:
-        current_index = len(products) - 1
-
-    product = products[current_index]
-    total_count = len(products)
-
-    text = (
-        f"🏷 *{product['name']}*\n\n"
-        f"📝 {product['description']}\n\n"
-        f"💰 Цена: *{product['price']:.2f} сомонӣ*\n"
-        f"📦 В наличии: {product['stock']} шт.\n\n"
-        f"📍 Категория: #{category_name}"
-    )
-
-    nav_row = []
-
-    if
+                [InlineKeyboardButton("⬅️ Назад", callback
