@@ -8,7 +8,7 @@ from handlers.start import start_handler
 from handlers.menu import main_menu_handler
 from handlers.catalog import get_catalog_handlers
 
-TOKEN = "8709726103:AAEzNysfOYWb8hnWL44pUtSVAu_e0QLc38g"
+TOKEN = "8709726103:AAEqLzikyRxkusEyulxhvmL5sJ1Ivcb_THs"
 
 
 def main():
