@@ -1,8 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, CallbackQueryHandler
 import database
 from utils import safe_edit_text
-import urllib.parse
 
 
 async def show_catalog_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -18,13 +17,9 @@ async def show_catalog_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     keyboard = []
 
     for cat in categories:
-        cat_str = str(cat)
-
-        # защита от крашей Telegram
-        safe_cat = urllib.parse.quote(cat_str)
-
+        cat = str(cat)
         keyboard.append([
-            InlineKeyboardButton(cat_str, callback_data=f"cat_{safe_cat}_0")
+            InlineKeyboardButton(cat, callback_data=f"cat_{cat}_0")
         ])
 
     keyboard.append([
@@ -44,8 +39,7 @@ async def show_category_products(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
 
     data = query.data.split("_")
-
-    category_name = urllib.parse.unquote(data[1])
+    category_name = data[1]
     current_index = int(data[2])
 
     products = await database.get_products_by_category(category_name)
@@ -55,4 +49,67 @@ async def show_category_products(update: Update, context: ContextTypes.DEFAULT_T
             query,
             "В этой категории пока нет товаров.",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("⬅️ Назад", callback
+                [InlineKeyboardButton("⬅️ Назад", callback_data="show_catalog")]
+            ])
+        )
+        return
+
+    if current_index >= len(products):
+        current_index = 0
+
+    product = products[current_index]
+    total = len(products)
+
+    text = (
+        f"🏷 *{product['name']}*\n\n"
+        f"📝 {product['description']}\n\n"
+        f"💰 Цена: *{product['price']:.2f} сомонӣ*\n"
+        f"📦 В наличии: {product['stock']} шт.\n"
+    )
+
+    keyboard = []
+
+    if total > 1:
+        prev_idx = current_index - 1 if current_index > 0 else total - 1
+        next_idx = current_index + 1 if current_index < total - 1 else 0
+
+        keyboard.append([
+            InlineKeyboardButton("⬅️", callback_data=f"cat_{category_name}_{prev_idx}"),
+            InlineKeyboardButton(f"{current_index+1}/{total}", callback_data="ignore"),
+            InlineKeyboardButton("➡️", callback_data=f"cat_{category_name}_{next_idx}")
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton("🛒 Купить", callback_data=f"buy_{product['id']}")
+    ])
+
+    keyboard.append([
+        InlineKeyboardButton("📂 Категории", callback_data="show_catalog")
+    ])
+
+    await safe_edit_text(
+        query,
+        text,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+async def add_to_cart_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    product_id = int(query.data.split("_")[1])
+    user_id = query.from_user.id
+
+    await database.add_to_cart(user_id, product_id, 1)
+
+    await query.answer("Добавлено в корзину", show_alert=False)
+
+
+def get_catalog_handlers():
+    return [
+        CallbackQueryHandler(show_catalog_handler, pattern="^show_catalog$"),
+        CallbackQueryHandler(show_category_products, pattern="^cat_"),
+        CallbackQueryHandler(add_to_cart_handler, pattern="^buy_"),
+    ]
