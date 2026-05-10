@@ -50,6 +50,7 @@ async def remove_from_cart_handler(update: Update, context: ContextTypes.DEFAULT
     query = update.callback_query
     await query.answer()
 
+    # Поправил срез индекса для получения ID продукта
     product_id = int(query.data.split("_")[2])
     user_id = query.from_user.id
     await database.remove_from_cart(user_id, product_id)
@@ -94,3 +95,4 @@ async def show_orders_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("⬅️ Главное меню", callback_data="main_menu")]
         ]),
+    )
