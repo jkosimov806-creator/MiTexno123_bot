@@ -64,7 +64,7 @@ async def show_category_products(update: Update, context: ContextTypes.DEFAULT_T
         f"🏷 *{product['name']}*\n\n"
         f"📝 {product['description']}\n\n"
         f"💰 Цена: *{product['price']:.2f} сомонӣ*\n"
-        f"📦 В наличии: {product['stock']} шт.\n"
+        f"📦 В наличии: {product['stock']} шт."
     )
 
     keyboard = []
