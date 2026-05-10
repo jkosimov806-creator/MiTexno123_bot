@@ -4,7 +4,7 @@ import sqlite3
 
 # --- sqlite3 ---
 TOKEN = '8709726103:AAEqLzikyRxkusEyulxhvmL5sJ1Ivcb_THs'
-ADMIN_ID = 123456789  # Твой ID цифрами (узнай у @userinfobot)
+ADMIN_ID = 6362382479  # Твой ID цифрами (узнай у @userinfobot)
 
 bot = telebot.TeleBot(TOKEN)
 
