@@ -17,7 +17,7 @@ async def support_info(c: types.CallbackQuery):
         "━━━━━━━━━━━━━━━━━━━━\n"
         "Наши специалисты помогут с выбором и оформлением заказа.\n\n"
         f"👉 Менеджер: {SUPPORT_USERNAME}\n"
-        "🕐 Работаем: 9:00 – 22:00"
+        "🕐 Работаем: 9:00 – 19:00"
     )
     try:
         await c.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
