@@ -1,7 +1,0 @@
-meta:
-  environment: python
-  toolVersion: "3.11"
-  toolchain: pip
-run:
-  persistenceMount: /data
-  command: python main.py
