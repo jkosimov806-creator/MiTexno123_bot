@@ -1,0 +1,6 @@
+meta:
+  environment: python
+  toolVersion: "3.11"
+run:
+  persistenceMount: /data
+  command: python main.py
