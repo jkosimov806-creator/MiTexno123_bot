@@ -10,5 +10,12 @@ def db_query(sql, params=(), fetch=False, fetch_one=False):
 
 def init_db():
     db_query('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY)')
-    db_query('CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, price INTEGER, desc TEXT, photo TEXT)')
+    # Создаем таблицу с полем categorie
+    db_query('''CREATE TABLE IF NOT EXISTS items 
+                (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                name TEXT, 
+                price INTEGER, 
+                desc TEXT, 
+                photo TEXT, 
+                categorie TEXT)''')
     db_query('CREATE TABLE IF NOT EXISTS promos (code TEXT PRIMARY KEY, discount INTEGER)')
