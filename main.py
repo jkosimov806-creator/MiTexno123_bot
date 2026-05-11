@@ -1,6 +1,4 @@
-import asyncio
-import re
-import sqlite3
+import asyncio, re, sqlite3
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -11,155 +9,130 @@ from config import TOKEN, ADMIN_ID, SUPPORT_LINK
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Состояния
 class OrderState(StatesGroup):
-    waiting_for_name = State()
-    waiting_for_phone = State()
-    waiting_for_address = State()
+    waiting_for_name, waiting_for_phone, waiting_for_address = State(), State(), State()
 
 class AdminState(StatesGroup):
-    waiting_for_broadcast_text = State()
+    waiting_for_broadcast = State()
+    add_item_name, add_item_price, add_item_desc, add_item_photo = State(), State(), State(), State()
 
-# Работа с базой данных для рассылки
-def init_db():
-    conn = sqlite3.connect('users.db')
-    cursor = conn.cursor()
-    cursor.execute('CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY)')
-    conn.commit()
-    conn.close()
+# --- БАЗА ДАННЫХ (храним юзеров и товары) ---
+def db_query(sql, params=(), fetch=False):
+    with sqlite3.connect('mi_texno.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        if fetch: return cursor.fetchall()
+        conn.commit()
 
-def add_user(user_id):
-    conn = sqlite3.connect('users.db')
-    cursor = conn.cursor()
-    cursor.execute('INSERT OR IGNORE INTO users (user_id) VALUES (?)', (user_id,))
-    conn.commit()
-    conn.close()
+db_query('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY)')
+db_query('CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, price TEXT, desc TEXT, photo TEXT)')
 
-def get_all_users():
-    conn = sqlite3.connect('users.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT user_id FROM users')
-    users = cursor.fetchall()
-    conn.close()
-    return [user[0] for user in users]
-
-PRODUCTS = [
-    {"id": 0, "name": "Xiaomi 14 Ultra", "price": "14500 c.", "desc": "Камера Leica.", "img": "https://media-amazon.com"},
-    {"id": 1, "name": "iPhone 15 Pro Max", "price": "13200 c.", "desc": "Титан.", "img": "https://clck.ru"},
-    {"id": 2, "name": "AirPods Pro 2", "price": "2950 c.", "desc": "Звук топ.", "img": "https://clck.ru"}
-]
-
-# Кнопки
+# Кнопки главного меню
 def main_kb():
     kb = InlineKeyboardBuilder()
-    kb.row(types.InlineKeyboardButton(text="📦 Каталог", callback_data="cat_0"))
+    kb.row(types.InlineKeyboardButton(text="📦 Каталог товаров", callback_data="catalog_0"))
     kb.row(types.InlineKeyboardButton(text="🆘 Поддержка", url=SUPPORT_LINK))
     return kb.as_markup()
 
-# --- КЛИЕНТСКАЯ ЧАСТЬ ---
-
 @dp.message(CommandStart())
 async def start(message: types.Message):
-    add_user(message.from_user.id) # Запоминаем юзера для рассылки
-    await message.answer(
-        "**Вас приветствует Mi Texno** 📱\n\nБлагодарим за визит! Что Вы хотите сделать?",
-        reply_markup=main_kb(), parse_mode="Markdown"
-    )
+    db_query('INSERT OR IGNORE INTO users VALUES (?)', (message.from_user.id,))
+    await message.answer(f"**Вас приветствует Mi Texno** 📱\n\nБлагодарим за визит! Что Вы хотите сделать?", reply_markup=main_kb(), parse_mode="Markdown")
 
-@dp.callback_query(F.data.startswith("cat_"))
-async def show_item(callback: types.CallbackQuery):
-    index = int(callback.data.split("_")[1])
-    p = PRODUCTS[index]
-    kb = InlineKeyboardBuilder()
-    kb.row(types.InlineKeyboardButton(text="📥 Купить", callback_data=f"buy_{index}"))
-    nav_btns = [types.InlineKeyboardButton(text=f"• {i+1} •" if i == index else str(i+1), callback_data=f"cat_{i}") for i in range(len(PRODUCTS))]
-    kb.row(*nav_btns)
-    kb.row(types.InlineKeyboardButton(text="⬅️ В меню", callback_data="to_main"))
+# --- КАТАЛОГ (АНКЕТЫ) ---
+@dp.callback_query(F.data.startswith("catalog_"))
+async def show_catalog(callback: types.CallbackQuery):
+    items = db_query('SELECT * FROM items', fetch=True)
+    if not items:
+        return await callback.answer("Каталог пока пуст. Админ, добавь товары!", show_alert=True)
     
-    try:
-        await callback.message.edit_media(
-            media=types.InputMediaPhoto(media=p['img'], caption=f"**{p['name']}**\n{p['price']}\n{p['desc']}", parse_mode="Markdown"),
-            reply_markup=kb.as_markup()
-        )
-    except:
-        await callback.message.answer_photo(photo=p['img'], caption=f"**{p['name']}**\n{p['price']}", reply_markup=kb.as_markup(), parse_mode="Markdown")
-        await callback.message.delete()
-
-@dp.callback_query(F.data == "to_main")
-async def to_main(callback: types.CallbackQuery):
-    await callback.message.delete()
-    await start(callback.message)
-
-# Оформление заказа (как в прошлом коде)
-@dp.callback_query(F.data.startswith("buy_"))
-async def choose_bank(callback: types.CallbackQuery, state: FSMContext):
-    await state.update_data(product=PRODUCTS[int(callback.data.split("_")[1])]['name'])
+    idx = int(callback.data.split("_")[1])
+    item = items[idx] # [id, name, price, desc, photo]
+    
     kb = InlineKeyboardBuilder()
-    kb.row(types.InlineKeyboardButton(text="Alif Bank 🟢", callback_data="set_bank_Alif"))
-    kb.row(types.InlineKeyboardButton(text="Eskhata Bank 🔴", callback_data="set_bank_Eskhata"))
-    kb.row(types.InlineKeyboardButton(text="Dushanbe City 🟡", callback_data="set_bank_DC"))
-    await callback.message.answer("Выберите банк:", reply_markup=kb.as_markup())
+    kb.row(types.InlineKeyboardButton(text="📥 Купить", callback_data=f"buy_{item[0]}"))
+    
+    # Листалка
+    nav = []
+    for i in range(len(items)):
+        nav.append(types.InlineKeyboardButton(text=f"•{i+1}•" if i == idx else str(i+1), callback_data=f"catalog_{i}"))
+    kb.row(*nav)
+    kb.row(types.InlineKeyboardButton(text="⬅️ Меню", callback_data="to_menu"))
 
-@dp.callback_query(F.data.startswith("set_bank_"))
-async def start_order(callback: types.CallbackQuery, state: FSMContext):
-    await state.update_data(bank=callback.data.split("_")[2])
-    await callback.message.answer("Введите Ваше имя:")
+    await callback.message.delete()
+    await callback.message.answer_photo(photo=item[4], caption=f"**{item[1]}**\n\n{item[3]}\n\n**Цена:** {item[2]}", reply_markup=kb.as_markup(), parse_mode="Markdown")
+
+# --- ОФОРМЛЕНИЕ ЗАКАЗА ---
+@dp.callback_query(F.data.startswith("buy_"))
+async def buy(callback: types.CallbackQuery, state: FSMContext):
+    kb = InlineKeyboardBuilder()
+    for b in ["Alif Bank 🟢", "Eskhata Bank 🔴", "Dushanbe City 🟡"]:
+        kb.row(types.InlineKeyboardButton(text=b, callback_data=f"pay_{b}"))
+    await callback.message.answer("Выберите банк для оплаты:", reply_markup=kb.as_markup())
     await state.set_state(OrderState.waiting_for_name)
 
+@dp.callback_query(F.data.startswith("pay_"))
+async def set_bank(callback: types.CallbackQuery, state: FSMContext):
+    await state.update_data(bank=callback.data.split("_")[1])
+    await callback.message.answer("Введите Ваше Имя:")
+
 @dp.message(OrderState.waiting_for_name)
-async def get_name(message: types.Message, state: FSMContext):
-    await state.update_data(name=message.text)
-    await message.answer("Введите номер (+992XXXXXXXXX):")
+async def name(message: types.Message, state: FSMContext):
+    await state.update_data(name=message.text); await message.answer("Введите номер (+992XXXXXXXXX):")
     await state.set_state(OrderState.waiting_for_phone)
 
 @dp.message(OrderState.waiting_for_phone)
-async def get_phone(message: types.Message, state: FSMContext):
+async def phone(message: types.Message, state: FSMContext):
     if re.fullmatch(r"^\+992\d{9}$", message.text):
-        await state.update_data(phone=message.text)
-        await message.answer("Введите адрес:")
+        await state.update_data(phone=message.text); await message.answer("Введите адрес доставки:")
         await state.set_state(OrderState.waiting_for_address)
-    else:
-        await message.answer("❌ Формат: +992 и 9 цифр.")
+    else: await message.answer("❌ Ошибка! Формат: +992 и 9 цифр.")
 
 @dp.message(OrderState.waiting_for_address)
-async def get_address(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    order_msg = f"🆕 **ЗАКАЗ!**\nТовар: {data['product']}\nИмя: {data['name']}\nТел: {data['phone']}\nАдрес: {message.text}\nБанк: {data['bank']}"
-    await bot.send_message(ADMIN_ID, order_msg)
-    await message.answer("✅ **Заказ сделан!** Ожидайте.", reply_markup=main_kb())
+async def address(message: types.Message, state: FSMContext):
+    d = await state.get_data()
+    order = f"🆕 **ЗАКАЗ!**\nИмя: {d['name']}\nТел: {d['phone']}\nАдрес: {message.text}\nБанк: {d['bank']}"
+    await bot.send_message(ADMIN_ID, order)
+    await message.answer("✅ **Вы сделали заказ!** Ожидайте подтверждения.", reply_markup=main_kb())
     await state.clear()
 
-# --- АДМИН-ПАНЕЛЬ ---
-
+# --- АДМИНКА ---
 @dp.message(Command("admin"))
-async def admin_panel(message: types.Message):
-    if message.from_user.id == ADMIN_ID:
-        kb = InlineKeyboardBuilder()
-        kb.row(types.InlineKeyboardButton(text="📢 Сделать рассылку", callback_data="admin_broadcast"))
-        await message.answer("⚡ **Панель администратора Mi Texno**", reply_markup=kb.as_markup())
+async def admin(message: types.Message):
+    if message.from_user.id != ADMIN_ID: return
+    kb = InlineKeyboardBuilder()
+    kb.row(types.InlineKeyboardButton(text="➕ Добавить товар", callback_data="add_item"))
+    kb.row(types.InlineKeyboardButton(text="📢 Рассылка", callback_data="broadcast"))
+    await message.answer("🛠 Панель Mi Texno", reply_markup=kb.as_markup())
 
-@dp.callback_query(F.data == "admin_broadcast")
-async def broadcast_start(callback: types.CallbackQuery, state: FSMContext):
-    await callback.message.answer("Введите текст рассылки (его получат все юзеры):")
-    await state.set_state(AdminState.waiting_for_broadcast_text)
+@dp.callback_query(F.data == "add_item")
+async def add_start(c: types.CallbackQuery, state: FSMContext):
+    await c.message.answer("Введите название товара:"); await state.set_state(AdminState.add_item_name)
 
-@dp.message(AdminState.waiting_for_broadcast_text)
-async def broadcast_finish(message: types.Message, state: FSMContext):
-    users = get_all_users()
-    count = 0
-    for user_id in users:
-        try:
-            await bot.send_message(user_id, message.text)
-            count += 1
-        except:
-            pass
-    await message.answer(f"✅ Рассылка завершена! Отправлено {count} пользователям.")
-    await state.clear()
+@dp.message(AdminState.add_item_name)
+async def add_n(m: types.Message, state: FSMContext):
+    await state.update_data(n=m.text); await m.answer("Цена:"); await state.set_state(AdminState.add_item_price)
+
+@dp.message(AdminState.add_item_price)
+async def add_p(m: types.Message, state: FSMContext):
+    await state.update_data(p=m.text); await m.answer("Описание:"); await state.set_state(AdminState.add_item_desc)
+
+@dp.message(AdminState.add_item_desc)
+async def add_d(m: types.Message, state: FSMContext):
+    await state.update_data(d=m.text); await m.answer("Пришлите фото товара:"); await state.set_state(AdminState.add_item_photo)
+
+@dp.message(AdminState.add_item_photo, F.photo)
+async def add_ph(m: types.Message, state: FSMContext):
+    data = await state.get_data()
+    db_query('INSERT INTO items (name, price, desc, photo) VALUES (?,?,?,?)', (data['n'], data['p'], data['d'], m.photo[-1].file_id))
+    await m.answer("✅ Товар успешно добавлен в каталог!"); await state.clear()
+
+@dp.callback_query(F.data == "to_menu")
+async def m_back(c: types.CallbackQuery):
+    await c.message.delete(); await start(c.message)
 
 async def main():
-    init_db() # Запуск БД
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
-if __name__ == "__main__":
-    asyncio.run(main())
+if __name__ == "__main__": asyncio.run(main())
