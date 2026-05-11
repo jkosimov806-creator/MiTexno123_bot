@@ -13,22 +13,15 @@ dp = Dispatcher()
 class OrderState(StatesGroup):
     waiting_for_count = State()
     waiting_for_promo = State()
-    waiting_for_name = State()
-    waiting_for_phone = State()
-    waiting_for_address = State()
-    waiting_for_bank = State()
-    waiting_for_check = State()
+    waiting_for_name, waiting_for_phone, waiting_for_address = State(), State(), State()
+    waiting_for_bank, waiting_for_check = State(), State()
 
 class AdminState(StatesGroup):
     broadcast = State()
-    add_item_name = State()
-    add_item_price = State()
-    add_item_desc = State()
-    add_item_photo = State()
-    add_promo_code = State()
-    add_promo_discount = State()
+    add_item_name, add_item_price, add_item_desc, add_item_photo = State(), State(), State(), State()
+    add_promo_code, add_promo_discount = State(), State()
 
-# --- РАБОТА С БАЗОЙ ---
+# --- БАЗА ДАННЫХ ---
 def db_query(sql, params=(), fetch=False, fetch_one=False):
     with sqlite3.connect('mi_texno.db') as conn:
         cursor = conn.cursor()
@@ -50,13 +43,10 @@ def main_kb(user_id):
 @dp.message(CommandStart())
 async def start(message: types.Message):
     db_query('INSERT OR IGNORE INTO users VALUES (?)', (message.from_user.id,))
-    text = (
-        f"◈ **MI TEXNO | Premium Store** 📱\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"Здравствуйте! Рады видеть Вас в нашем пространстве инноваций.\n\n"
-        f"Используйте меню ниже для навигации по магазину:"
+    await message.answer(
+        f"◈ **MI TEXNO | Premium Store** 📱\n━━━━━━━━━━━━━━━━━━━━\nРады Вас видеть! Выберите раздел для продолжения:",
+        reply_markup=main_kb(message.from_user.id), parse_mode="Markdown"
     )
-    await message.answer(text, reply_markup=main_kb(message.from_user.id), parse_mode="Markdown")
 
 # --- ПОДДЕРЖКА ---
 @dp.callback_query(F.data == "support_info")
@@ -64,12 +54,13 @@ async def support_call(c: types.CallbackQuery):
     text = (
         "◈ **СЛУЖБА ПОДДЕРЖКИ MI TEXNO** 🛡\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "У Вас возникли вопросы или предложения? Наш менеджер всегда на связи, чтобы помочь Вам.\n\n"
-        "Нажмите на кнопку ниже, чтобы начать диалог:"
+        "Наши специалисты всегда готовы помочь Вам с выбором или оформлением заказа.\n\n"
+        "Для связи с менеджером напишите по адресу:\n"
+        "👉 @Mi_Texn0\n\n"
+        "Мы работаем для Вашего комфорта."
     )
     kb = InlineKeyboardBuilder()
-    kb.row(types.InlineKeyboardButton(text="👨‍💻 НАПИСАТЬ МЕНЕДЖЕРУ", url=SUPPORT_LINK))
-    kb.row(types.InlineKeyboardButton(text="⬅️ НАЗАД", callback_data="to_main"))
+    kb.row(types.InlineKeyboardButton(text="⬅️ ВЕРНУТЬСЯ НАЗАД", callback_data="to_main"))
     await c.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="Markdown")
 
 # --- КАТАЛОГ ---
@@ -77,16 +68,12 @@ async def support_call(c: types.CallbackQuery):
 async def show_catalog(c: types.CallbackQuery):
     items = db_query('SELECT * FROM items', fetch=True)
     if not items: return await c.answer("Каталог временно пуст.", show_alert=True)
-    
-    idx = int(c.data.split("_")[-1]) % len(items)
-    item = items[idx]
-    
+    idx = int(c.data.split("_")[-1]) % len(items); item = items[idx]
     kb = InlineKeyboardBuilder()
     kb.row(types.InlineKeyboardButton(text="➕ ДОБАВИТЬ В КОРЗИНУ", callback_data=f"start_count_{item[0]}"))
     nav = [types.InlineKeyboardButton(text=f"• {i+1} •" if i == idx else str(i+1), callback_data=f"catalog_{i}") for i in range(len(items))]
     kb.row(*nav)
-    kb.row(types.InlineKeyboardButton(text="⬅️ МЕНЮ", callback_data="to_main"))
-    
+    kb.row(types.InlineKeyboardButton(text="⬅️ В МЕНЮ", callback_data="to_main"))
     caption = f"┃ **{item[1]}**\n┃ ━━━━━━━━━━━━━━\n┃ {item[3] if item[3] else '—'}\n\n┃ ◈ **Цена:** {item[2]} TJS"
     await c.message.delete()
     await c.message.answer_photo(photo=item[4], caption=caption, reply_markup=kb.as_markup(), parse_mode="Markdown")
@@ -118,56 +105,97 @@ async def handle_cnt(c: types.CallbackQuery, state: FSMContext):
         kb = InlineKeyboardBuilder()
         kb.row(types.InlineKeyboardButton(text="📦 К ДРУГИМ ТОВАРАМ", callback_data="catalog_0"))
         kb.row(types.InlineKeyboardButton(text="🛒 В КОРЗИНУ", callback_data="view_cart"))
-        return await c.message.answer("✅ Товар добавлен в корзину!", reply_markup=kb.as_markup())
+        return await c.message.answer("✅ Товар успешно добавлен!", reply_markup=kb.as_markup())
     await state.update_data(cur_qty=qty); await update_count_msg(c, qty)
 
-# --- АДМИНКА (ИСПРАВЛЕННАЯ) ---
+# --- КОРЗИНА ---
+@dp.callback_query(F.data == "view_cart")
+async def view_cart(c: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data(); cart = data.get('cart', {}); promo = data.get('promo_discount', 0)
+    if not cart: return await c.answer("Ваша корзина пуста.", show_alert=True)
+    res = "◈ **ВАША КОРЗИНА**\n━━━━━━━━━━━━━━\n"; total = 0
+    for i_id, q in cart.items():
+        i = db_query('SELECT name, price FROM items WHERE id = ?', (i_id,), fetch_one=True)
+        if i:
+            sum_i = i[1] * q; total += sum_i
+            res += f"▻ {i[0]} | {q} шт. — `{sum_i} TJS`\n"
+    final_total = max(0, total - promo)
+    res += f"━━━━━━━━━━━━━━\n**Итого:** {total} TJS"
+    if promo: res += f"\n**Скидка:** -{promo} TJS\n**К оплате:** `{final_total} TJS`"
+    kb = InlineKeyboardBuilder()
+    kb.row(types.InlineKeyboardButton(text="🎟 ПРОМОКОД", callback_data="apply_promo"), types.InlineKeyboardButton(text="💳 ОФОРМИТЬ", callback_data="checkout"))
+    kb.row(types.InlineKeyboardButton(text="📦 ЕЩЕ ТОВАРЫ", callback_data="catalog_0"), types.InlineKeyboardButton(text="🗑 ОЧИСТИТЬ", callback_data="clear_cart"))
+    await c.message.answer(res, reply_markup=kb.as_markup(), parse_mode="Markdown")
+
+# --- ОФОРМЛЕНИЕ ---
+@dp.callback_query(F.data == "checkout")
+async def ch_start(c: types.CallbackQuery, state: FSMContext):
+    await c.message.answer("Укажите Ваше Имя:"); await state.set_state(OrderState.waiting_for_name)
+
+@dp.message(OrderState.waiting_for_name)
+async def ch_name(m: types.Message, state: FSMContext):
+    await state.update_data(name=m.text); await m.answer("Номер (+992XXXXXXXXX):"); await state.set_state(OrderState.waiting_for_phone)
+
+@dp.message(OrderState.waiting_for_phone)
+async def ch_phone(m: types.Message, state: FSMContext):
+    if re.fullmatch(r"^\+992\d{9}$", m.text):
+        await state.update_data(phone=m.text); await m.answer("Адрес:"); await state.set_state(OrderState.waiting_for_address)
+    else: await m.answer("❌ Формат: +992 и 9 цифр.")
+
+@dp.message(OrderState.waiting_for_address)
+async def ch_addr(m: types.Message, state: FSMContext):
+    await state.update_data(addr=m.text)
+    kb = InlineKeyboardBuilder()
+    for b in ["Alif", "Eskhata", "DC"]: kb.row(types.InlineKeyboardButton(text=b, callback_data=f"pay_{b}"))
+    await m.answer("Выберите банк:", reply_markup=kb.as_markup()); await state.set_state(OrderState.waiting_for_bank)
+
+@dp.callback_query(OrderState.waiting_for_bank)
+async def ch_bank(c: types.CallbackQuery, state: FSMContext):
+    bank = c.data.split("_")[-1]; await state.update_data(bank=bank)
+    await c.message.answer(f"Реквизиты: `+992928663510`\nПришлите чек."); await state.set_state(OrderState.waiting_for_check)
+
+@dp.message(OrderState.waiting_for_check, F.photo)
+async def ch_final(m: types.Message, state: FSMContext):
+    d = await state.get_data(); cart_text = ""; total = 0
+    for i_id, q in d['cart'].items():
+        i = db_query('SELECT name, price FROM items WHERE id = ?', (i_id,), fetch_one=True)
+        cart_text += f"- {i[0]} x{q}\n"; total += i[1] * q
+    kb = InlineKeyboardBuilder()
+    kb.row(types.InlineKeyboardButton(text="✅ Ок", callback_data=f"adm_ok_{m.from_user.id}"), types.InlineKeyboardButton(text="❌ Нет", callback_data=f"adm_no_{m.from_user.id}"))
+    await bot.send_photo(ADMIN_ID, photo=m.photo[-1].file_id, caption=f"ЗАКАЗ:\n{cart_text}\n{d['name']}\n{d['phone']}\n{d['addr']}", reply_markup=kb.as_markup())
+    await m.answer("✅ Отправлено!", reply_markup=main_kb(m.from_user.id)); await state.update_data(cart={})
+
+# --- АДМИНКА ---
 @dp.callback_query(F.data == "admin_menu")
-async def admin_menu_call(c: types.CallbackQuery):
+async def ad_menu(c: types.CallbackQuery):
     if c.from_user.id != ADMIN_ID: return
     kb = InlineKeyboardBuilder()
-    kb.row(types.InlineKeyboardButton(text="➕ ТОВАР", callback_data="add_item"))
-    kb.row(types.InlineKeyboardButton(text="🎟 ПРОМОКОД", callback_data="add_promo"))
+    kb.row(types.InlineKeyboardButton(text="➕ ТОВАР", callback_data="add_item"), types.InlineKeyboardButton(text="🎟 ПРОМО", callback_data="add_promo"))
     kb.row(types.InlineKeyboardButton(text="📢 РАССЫЛКА", callback_data="broadcast"))
-    kb.row(types.InlineKeyboardButton(text="⬅️ НАЗАД", callback_data="to_main"))
-    await c.message.answer("⚙️ **MI TEXNO | ПАНЕЛЬ УПРАВЛЕНИЯ**", reply_markup=kb.as_markup())
+    await c.message.answer("🛠 АДМИН-ПАНЕЛЬ", reply_markup=kb.as_markup())
 
 @dp.callback_query(F.data == "add_item")
-async def admin_add_item(c: types.CallbackQuery, state: FSMContext):
-    await c.message.answer("Введите название товара:"); await state.set_state(AdminState.add_item_name)
+async def ad_add(c: types.CallbackQuery, state: FSMContext):
+    await c.message.answer("Название:"); await state.set_state(AdminState.add_item_name)
 
 @dp.message(AdminState.add_item_name)
-async def ad_name(m: types.Message, state: FSMContext):
-    await state.update_data(n=m.text); await m.answer("Введите цену (число):"); await state.set_state(AdminState.add_item_price)
+async def ad_n(m: types.Message, state: FSMContext):
+    await state.update_data(n=m.text); await m.answer("Цена:"); await state.set_state(AdminState.add_item_price)
 
 @dp.message(AdminState.add_item_price)
-async def ad_price(m: types.Message, state: FSMContext):
-    await state.update_data(p=m.text); await m.answer("Введите описание (или /skip):"); await state.set_state(AdminState.add_item_desc)
+async def ad_p(m: types.Message, state: FSMContext):
+    await state.update_data(p=m.text); await m.answer("Описание:"); await state.set_state(AdminState.add_item_desc)
 
 @dp.message(AdminState.add_item_desc)
-async def ad_desc(m: types.Message, state: FSMContext):
+async def ad_d(m: types.Message, state: FSMContext):
     d = "" if m.text == "/skip" else m.text
-    await state.update_data(d=d); await m.answer("Пришлите фото товара:"); await state.set_state(AdminState.add_item_photo)
+    await state.update_data(d=d); await m.answer("Фото:"); await state.set_state(AdminState.add_item_photo)
 
 @dp.message(AdminState.add_item_photo, F.photo)
-async def ad_photo(m: types.Message, state: FSMContext):
+async def ad_ph(m: types.Message, state: FSMContext):
     data = await state.get_data()
     db_query('INSERT INTO items (name, price, desc, photo) VALUES (?,?,?,?)', (data['n'], int(data['p']), data['d'], m.photo[-1].file_id))
-    await m.answer("✅ Товар успешно добавлен!", reply_markup=main_kb(m.from_user.id)); await state.clear()
-
-@dp.callback_query(F.data == "broadcast")
-async def ad_broad(c: types.CallbackQuery, state: FSMContext):
-    await c.message.answer("Введите текст рассылки:"); await state.set_state(AdminState.broadcast)
-
-@dp.message(AdminState.broadcast)
-async def ad_broad_done(m: types.Message, state: FSMContext):
-    users = db_query('SELECT id FROM users', fetch=True); count = 0
-    for u in users:
-        try: await bot.send_message(u[0], m.text); count += 1
-        except: pass
-    await m.answer(f"✅ Рассылка завершена! Получили: {count} чел."); await state.clear()
-
-# [Остальные функции: view_cart, checkout, apply_promo – без изменений, но убедись что они есть]
+    await m.answer("✅ Добавлено!"); await state.clear()
 
 @dp.callback_query(F.data == "to_main")
 async def back_to_main(c: types.CallbackQuery):
