@@ -32,10 +32,9 @@ def init_db():
     with get_conn() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
-                id      INTEGER PRIMARY KEY,
-                joined  TEXT DEFAULT (datetime('now'))
+                id     INTEGER PRIMARY KEY,
+                joined TEXT DEFAULT (datetime('now'))
             );
-
             CREATE TABLE IF NOT EXISTS items (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 name        TEXT    NOT NULL,
@@ -44,14 +43,12 @@ def init_db():
                 photo       TEXT    DEFAULT '',
                 category    TEXT    DEFAULT ''
             );
-
             CREATE TABLE IF NOT EXISTS cart (
                 user_id INTEGER NOT NULL,
                 item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
                 qty     INTEGER NOT NULL DEFAULT 1,
                 PRIMARY KEY (user_id, item_id)
             );
-
             CREATE TABLE IF NOT EXISTS promos (
                 code     TEXT    PRIMARY KEY,
                 discount INTEGER NOT NULL CHECK(discount BETWEEN 1 AND 100),
@@ -85,13 +82,11 @@ def get_categories() -> list[str]:
     return [r[0] for r in rows] if rows else []
 
 
-def get_items_by_category(category: str) -> list[sqlite3.Row]:
-    return db_query(
-        "SELECT * FROM items WHERE category = ?", (category,), fetch=True
-    ) or []
+def get_items_by_category(category: str):
+    return db_query("SELECT * FROM items WHERE category = ?", (category,), fetch=True) or []
 
 
-def get_item(item_id: int) -> sqlite3.Row | None:
+def get_item(item_id: int):
     return db_query("SELECT * FROM items WHERE id = ?", (item_id,), fetch_one=True)
 
 
@@ -117,23 +112,20 @@ def cart_clear(user_id: int):
     db_query("DELETE FROM cart WHERE user_id = ?", (user_id,))
 
 
-def cart_get(user_id: int) -> list[sqlite3.Row]:
+def cart_get(user_id: int):
     return db_query(
         """SELECT i.id, i.name, i.price, c.qty, i.price * c.qty AS subtotal
            FROM cart c JOIN items i ON i.id = c.item_id
            WHERE c.user_id = ?""",
-        (user_id,),
-        fetch=True,
+        (user_id,), fetch=True,
     ) or []
 
 
 # ─── Promos ───────────────────────────────────────────────────────────────────
 
-def get_promo(code: str) -> sqlite3.Row | None:
+def get_promo(code: str):
     return db_query(
-        "SELECT * FROM promos WHERE code = ? AND active = 1",
-        (code,),
-        fetch_one=True,
+        "SELECT * FROM promos WHERE code = ? AND active = 1", (code,), fetch_one=True
     )
 
 
@@ -142,7 +134,3 @@ def add_promo(code: str, discount: int):
         "INSERT OR REPLACE INTO promos (code, discount, active) VALUES (?,?,1)",
         (code, discount),
     )
-
-
-def deactivate_promo(code: str):
-    db_query("UPDATE promos SET active = 0 WHERE
