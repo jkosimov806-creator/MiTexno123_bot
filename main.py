@@ -9,17 +9,24 @@ from config import TOKEN, ADMIN_ID, SUPPORT_LINK
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# --- СОСТОЯНИЯ ---
+# --- СОСТОЯНИЯ (ИСПРАВЛЕНО) ---
 class OrderState(StatesGroup):
     waiting_for_count = State()
     waiting_for_promo = State()
-    waiting_for_name, waiting_for_phone, waiting_for_address = State(), State(), State()
-    waiting_for_bank, waiting_for_check = State()
+    waiting_for_name = State()
+    waiting_for_phone = State()
+    waiting_for_address = State()
+    waiting_for_bank = State()
+    waiting_for_check = State()
 
 class AdminState(StatesGroup):
     broadcast = State()
-    add_item_name, add_item_price, add_item_desc, add_item_photo = State(), State(), State(), State()
-    add_promo_code, add_promo_discount = State(), State()
+    add_item_name = State()
+    add_item_price = State()
+    add_item_desc = State()
+    add_item_photo = State()
+    add_promo_code = State()
+    add_promo_discount = State()
 
 # --- БАЗА ДАННЫХ ---
 def db_query(sql, params=(), fetch=False, fetch_one=False):
@@ -30,7 +37,7 @@ def db_query(sql, params=(), fetch=False, fetch_one=False):
         if fetch: return cursor.fetchall()
         conn.commit()
 
-# --- КНОПКИ ---
+# --- КЛАВИАТУРЫ ---
 def main_kb(user_id):
     kb = InlineKeyboardBuilder()
     kb.row(types.InlineKeyboardButton(text="▻ ПЕРЕЙТИ В КАТАЛОГ", callback_data="catalog_0"))
@@ -48,7 +55,7 @@ async def start(message: types.Message):
         reply_markup=main_kb(message.from_user.id), parse_mode="Markdown"
     )
 
-# --- ПОДДЕРЖКА (ВШИТА ВНУТРЬ) ---
+# --- ПОДДЕРЖКА ---
 @dp.callback_query(F.data == "support_info")
 async def support_call(c: types.CallbackQuery):
     text = (
@@ -67,7 +74,8 @@ async def support_call(c: types.CallbackQuery):
 async def show_catalog(c: types.CallbackQuery):
     items = db_query('SELECT * FROM items', fetch=True)
     if not items: return await c.answer("Каталог временно пуст.", show_alert=True)
-    idx = int(c.data.split("_")[-1]) % len(items); item = items[idx]
+    idx = int(c.data.split("_")[-1]) % len(items)
+    item = items[idx]
     kb = InlineKeyboardBuilder()
     kb.row(types.InlineKeyboardButton(text="➕ ДОБАВИТЬ В КОРЗИНУ", callback_data=f"start_count_{item[0]}"))
     nav = [types.InlineKeyboardButton(text=f"• {i+1} •" if i == idx else str(i+1), callback_data=f"catalog_{i}") for i in range(len(items))]
@@ -113,6 +121,29 @@ async def ad_menu(c: types.CallbackQuery):
     kb.row(types.InlineKeyboardButton(text="➕ ТОВАР", callback_data="add_item"), types.InlineKeyboardButton(text="🎟 ПРОМО", callback_data="add_promo"))
     kb.row(types.InlineKeyboardButton(text="📢 РАССЫЛКА", callback_data="broadcast"))
     await c.message.answer("🛠 АДМИН-ПАНЕЛЬ", reply_markup=kb.as_markup())
+
+@dp.callback_query(F.data == "add_item")
+async def ad_add_start(c: types.CallbackQuery, state: FSMContext):
+    await c.message.answer("Название товара:"); await state.set_state(AdminState.add_item_name)
+
+@dp.message(AdminState.add_item_name)
+async def ad_add_name(m: types.Message, state: FSMContext):
+    await state.update_data(n=m.text); await m.answer("Цена (число):"); await state.set_state(AdminState.add_item_price)
+
+@dp.message(AdminState.add_item_price)
+async def ad_add_price(m: types.Message, state: FSMContext):
+    await state.update_data(p=m.text); await m.answer("Описание (/skip):"); await state.set_state(AdminState.add_item_desc)
+
+@dp.message(AdminState.add_item_desc)
+async def ad_add_desc(m: types.Message, state: FSMContext):
+    d = "" if m.text == "/skip" else m.text
+    await state.update_data(d=d); await m.answer("Пришлите фото:"); await state.set_state(AdminState.add_item_photo)
+
+@dp.message(AdminState.add_item_photo, F.photo)
+async def ad_add_photo(m: types.Message, state: FSMContext):
+    d = await state.get_data()
+    db_query('INSERT INTO items (name, price, desc, photo) VALUES (?,?,?,?)', (d['n'], int(d['p']), d['d'], m.photo[-1].file_id))
+    await m.answer("✅ Товар успешно добавлен!"); await state.clear()
 
 @dp.callback_query(F.data == "to_main")
 async def back_to_main(c: types.CallbackQuery):
