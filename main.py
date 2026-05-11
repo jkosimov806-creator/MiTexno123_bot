@@ -13,9 +13,6 @@ from aiogram.types import (
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import json
 
-# ========================
-# НАСТРОЙКИ
-# ========================
 BOT_TOKEN = "8709726103:AAEqLzikyRxkusEyulxhvmL5sJ1Ivcb_THs"
 ADMIN_IDS = [6362382479]
 
@@ -25,10 +22,7 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# ========================
-# БАЗА ДАННЫХ (JSON-файл)
-# ========================
-DB_FILE = "catalog.json"
+DB_FILE = "/data/catalog.json"
 
 def load_db() -> dict:
     if not os.path.exists(DB_FILE):
@@ -37,6 +31,7 @@ def load_db() -> dict:
         return json.load(f)
 
 def save_db(data: dict):
+    os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -44,9 +39,6 @@ def init_db():
     if not os.path.exists(DB_FILE):
         save_db({"categories": {}})
 
-# ========================
-# СТЕЙТЫ ДЛЯ АДМИНКИ
-# ========================
 class AdminStates(StatesGroup):
     waiting_category_name = State()
     waiting_product_category = State()
@@ -56,9 +48,6 @@ class AdminStates(StatesGroup):
     deleting_category = State()
     deleting_product = State()
 
-# ========================
-# КЛАВИАТУРЫ
-# ========================
 def main_menu_kb():
     kb = ReplyKeyboardMarkup(
         keyboard=[
@@ -127,9 +116,6 @@ def cancel_kb():
     builder.button(text="❌ Отмена", callback_data="admin_cancel")
     return builder.as_markup()
 
-# ========================
-# КОМАНДЫ
-# ========================
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     await message.answer(
@@ -137,9 +123,6 @@ async def cmd_start(message: types.Message):
         reply_markup=main_menu_kb()
     )
 
-# ========================
-# КАТАЛОГ
-# ========================
 @dp.message(F.text == "🛍 Каталог")
 async def show_catalog(message: types.Message):
     await message.answer("📂 Выберите категорию:", reply_markup=catalog_kb())
@@ -186,7 +169,6 @@ async def show_product(callback: types.CallbackQuery):
     index = max(0, min(index, total - 1))
     photo_id = photos[index]
     caption = f"<b>{product}</b>\n{description}\n\n📸 Фото {index + 1} из {total}"
-
     kb = product_photo_kb(category, product, index, total)
 
     try:
@@ -198,26 +180,17 @@ async def show_product(callback: types.CallbackQuery):
         else:
             await callback.message.delete()
             await callback.message.answer_photo(
-                photo=photo_id,
-                caption=caption,
-                parse_mode="HTML",
-                reply_markup=kb
+                photo=photo_id, caption=caption, parse_mode="HTML", reply_markup=kb
             )
     except Exception:
         await callback.message.answer_photo(
-            photo=photo_id,
-            caption=caption,
-            parse_mode="HTML",
-            reply_markup=kb
+            photo=photo_id, caption=caption, parse_mode="HTML", reply_markup=kb
         )
 
 @dp.callback_query(F.data == "noop")
 async def noop(callback: types.CallbackQuery):
     await callback.answer()
 
-# ========================
-# АДМИНКА
-# ========================
 def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
@@ -233,7 +206,6 @@ async def admin_cancel(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.edit_text("⚙️ <b>Панель администратора</b>", reply_markup=admin_main_kb(), parse_mode="HTML")
 
-# --- Добавить категорию ---
 @dp.callback_query(F.data == "admin_add_category")
 async def admin_add_category_start(callback: types.CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
@@ -253,7 +225,6 @@ async def admin_add_category_done(message: types.Message, state: FSMContext):
         await message.answer(f"✅ Категория «{cat_name}» создана!", reply_markup=admin_main_kb())
     await state.clear()
 
-# --- Добавить товар ---
 @dp.callback_query(F.data == "admin_add_product")
 async def admin_add_product_start(callback: types.CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
@@ -305,22 +276,18 @@ async def admin_product_description_done(message: types.Message, state: FSMConte
     category = data["category"]
     product_name = data["product_name"]
     photos = data.get("photos", [])
-
     db = load_db()
     db["categories"][category][product_name] = {
         "photos": photos,
         "description": description
     }
     save_db(db)
-
     await message.answer(
-        f"✅ Товар «{product_name}» добавлен в «{category}»!\n"
-        f"Фото: {len(photos)} шт.",
+        f"✅ Товар «{product_name}» добавлен в «{category}»!\nФото: {len(photos)} шт.",
         reply_markup=admin_main_kb()
     )
     await state.clear()
 
-# --- Удалить категорию ---
 @dp.callback_query(F.data == "admin_del_category")
 async def admin_del_category_start(callback: types.CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
@@ -344,7 +311,6 @@ async def admin_del_category_done(callback: types.CallbackQuery, state: FSMConte
         await callback.answer("Категория не найдена.", show_alert=True)
     await state.clear()
 
-# --- Удалить товар ---
 @dp.callback_query(F.data == "admin_del_product")
 async def admin_del_product_start(callback: types.CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
@@ -386,7 +352,6 @@ async def admin_del_product_done(callback: types.CallbackQuery, state: FSMContex
         await callback.answer("Товар не найден.", show_alert=True)
     await state.clear()
 
-# --- Список каталога ---
 @dp.callback_query(F.data == "admin_list")
 async def admin_list(callback: types.CallbackQuery):
     db = load_db()
@@ -407,9 +372,6 @@ async def admin_list(callback: types.CallbackQuery):
 async def admin_back(callback: types.CallbackQuery):
     await callback.message.edit_text("⚙️ <b>Панель администратора</b>", reply_markup=admin_main_kb(), parse_mode="HTML")
 
-# ========================
-# ЗАПУСК
-# ========================
 async def main():
     init_db()
     logger.info("Бот запущен!")
