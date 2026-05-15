@@ -64,7 +64,7 @@ async def show_item(c: types.CallbackQuery):
         return
     text = (
         f"<b>{item['name']}</b>\n━━━━━━━━━━━━━━━\n"
-        f"🏷️ Цена: <b>{item['price']} ₽</b>\n"
+        f"🏷️ Цена: <b>{item['price']} Сомони</b>\n"
         f"📂 Категория: {item['category']}\n\n"
         f"{item['description'] or ''}"
     )
