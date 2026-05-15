@@ -15,7 +15,7 @@ def _cart_text(items, discount: int = 0) -> tuple[str, int]:
     lines = ["<b>🛒 КОРЗИНА</b>\n━━━━━━━━━━━━━━━"]
     total = 0
     for row in items:
-        lines.append(f"• {row['name']} × {row['qty']} = <b>{row['subtotal']} ₽</b>")
+        lines.append(f"• {row['name']} × {row['qty']} = <b>{row['subtotal']} Сомони</b>")
         total += row["subtotal"]
     lines.append("━━━━━━━━━━━━━━━")
     if discount:
@@ -24,7 +24,7 @@ def _cart_text(items, discount: int = 0) -> tuple[str, int]:
         lines.append(f"💰 Итого: <s>{total} ₽</s> → <b>{final} Сомони</b>")
         total = final
     else:
-        lines.append(f"💰 Итого: <b>{total} ₽</b>")
+        lines.append(f"💰 Итого: <b>{total} Сомони</b>")
     return "\n".join(lines), total
 
 
@@ -84,7 +84,7 @@ async def checkout(c: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     _, total = _cart_text(items, data.get("promo_discount", 0))
 
-    order_lines = "\n".join(f"  • {r['name']} × {r['qty']} = {r['subtotal']} ₽" for r in items)
+    order_lines = "\n".join(f"  • {r['name']} × {r['qty']} = {r['subtotal']} Сомони" for r in items)
     from config import ADMIN_ID
     try:
         await c.bot.send_message(
