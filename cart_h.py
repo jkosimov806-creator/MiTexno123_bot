@@ -21,7 +21,7 @@ def _cart_text(items, discount: int = 0) -> tuple[str, int]:
     if discount:
         final = int(total * (1 - discount / 100))
         lines.append(f"🏷 Скидка: {discount}%")
-        lines.append(f"💰 Итого: <s>{total} ₽</s> → <b>{final} ₽</b>")
+        lines.append(f"💰 Итого: <s>{total} ₽</s> → <b>{final} Сомони</b>")
         total = final
     else:
         lines.append(f"💰 Итого: <b>{total} ₽</b>")
