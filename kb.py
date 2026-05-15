@@ -44,6 +44,8 @@ def items_kb(items, page: int, total_pages: int, category: str) -> InlineKeyboar
 
 
 def item_detail_kb(item_id: int, category: str) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardButton(text="🛒 В корзину", callback_data=f"add_cart:{item_id}")
+    back = InlineKeyboardButton(text="⬅️ Назад", callback_data=f"cat:{category}")
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(text="🛒 В корзину", callback_data=f"add_cart:{item_id}"))
     kb.row(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"cat:{category}"))
@@ -66,4 +68,5 @@ def admin_kb() -> InlineKeyboardMarkup:
     kb.row(InlineKeyboardButton(text="🗑 Удалить товар", callback_data="admin_del_item"))
     kb.row(InlineKeyboardButton(text="🏷 Добавить промокод", callback_data="admin_add_promo"))
     kb.row(InlineKeyboardButton(text="📢 Рассылка", callback_data="admin_broadcast"))
+    kb.row(InlineKeyboardButton(text="🔄 Синхронизировать каталог", callback_data="admin_sync"))
     return kb.as_markup()
