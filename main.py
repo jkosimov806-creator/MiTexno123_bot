@@ -7,7 +7,7 @@ from aiogram.enums import ParseMode
 from aiogram.types import BotCommand
 
 from config import TOKEN
-from database import init_db, register_user
+from database import init_db, register_user, warm_cache
 from kb import main_kb
 import admin_h, support_h, catalog_h, cart_h
 
@@ -77,15 +77,6 @@ async def cmd_support(message: types.Message):
     )
 
 
-@dp.message(F.text == "/admin")
-async def cmd_admin_msg(message: types.Message):
-    from config import ADMIN_ID
-    from kb import admin_kb
-    if message.from_user.id != ADMIN_ID:
-        return
-    await message.answer("<b>🛠 ПАНЕЛЬ УПРАВЛЕНИЯ</b>", reply_markup=admin_kb())
-
-
 @dp.callback_query(F.data == "to_main")
 async def back_to_main(c: types.CallbackQuery):
     await c.message.delete()
@@ -108,6 +99,7 @@ async def set_commands(bot: Bot):
 
 async def main():
     init_db()
+    warm_cache()  # загружаем все товары в память при старте
     await bot.delete_webhook(drop_pending_updates=True)
     await set_commands(bot)
     await dp.start_polling(bot)
