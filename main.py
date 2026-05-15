@@ -110,3 +110,15 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+cats = get_categories()
+if not cats:
+    logging.warning("Каталог пуст — запускаю автосинхронизацию...")
+    try:
+        from admin_h import get_all_products
+        from database import sync_items_from_sheet
+        items = get_all_products()
+        sync_items_from_sheet(items)
+        logging.info(f"Автосинхронизация: загружено {len(items)} товаров")
+    except Exception as e:
+        logging.error(f"Ошибка автосинхронизации: {e}")
