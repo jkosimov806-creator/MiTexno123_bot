@@ -6,15 +6,20 @@ DB_PATH = "/data/mi_texno.db"
 # ─── Кэш в памяти ─────────────────────────────────────────────────────────────
 _cache_categories: list[str] = []
 _cache_items: dict[str, list] = {}
+_cache_items_by_id: dict[int, object] = {}
 
 
 def warm_cache():
-    global _cache_categories, _cache_items
+    global _cache_categories, _cache_items, _cache_items_by_id
     rows = db_query("SELECT DISTINCT category FROM items WHERE category != ''", fetch=True)
     _cache_categories = [r[0] for r in rows] if rows else []
     _cache_items = {}
+    _cache_items_by_id = {}
     for cat in _cache_categories:
-        _cache_items[cat] = db_query("SELECT * FROM items WHERE category = ?", (cat,), fetch=True) or []
+        items = db_query("SELECT * FROM items WHERE category = ?", (cat,), fetch=True) or []
+        _cache_items[cat] = items
+        for item in items:
+            _cache_items_by_id[item["id"]] = item
 
 
 @contextmanager
@@ -107,6 +112,10 @@ def get_items_by_category(category: str):
 
 
 def get_item(item_id: int):
+    # сначала ищем в кэше — быстро
+    if item_id in _cache_items_by_id:
+        return _cache_items_by_id[item_id]
+    # если нет в кэше — идём в БД
     return db_query("SELECT * FROM items WHERE id = ?", (item_id,), fetch_one=True)
 
 
