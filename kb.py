@@ -29,7 +29,7 @@ def items_kb(items, page: int, total_pages: int, cat_index: str) -> InlineKeyboa
     kb = InlineKeyboardBuilder()
     for item in items:
         kb.row(InlineKeyboardButton(
-            text=f"{item['name']} — {item['price']} ₽",
+            text=f"{item['name']} — {item['price']} Сомони",
             callback_data=f"item:{item['id']}",
         ))
     nav = []
