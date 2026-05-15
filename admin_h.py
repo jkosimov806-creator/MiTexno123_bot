@@ -3,15 +3,28 @@ from aiogram import Router, F, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from config import ADMIN_ID
-from database import add_item, delete_item, get_item, get_all_user_ids, add_promo
+from config import ADMIN_ID, SPREADSHEET_ID, CREDENTIALS_FILE, SHEET_NAME
+from database import add_item, delete_item, get_item, get_all_user_ids, add_promo, sync_items_from_sheet
 from kb import admin_kb
+
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 router = Router()
 
 
 def is_admin(user_id: int) -> bool:
     return user_id == ADMIN_ID
+
+
+def get_sheet():
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_FILE, scope)
+    client = gspread.authorize(creds)
+    return client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
 
 
 class AddItemState(StatesGroup):
@@ -42,6 +55,32 @@ async def admin_panel(m: types.Message):
     if not is_admin(m.from_user.id):
         return
     await m.answer("<b>🛠 ПАНЕЛЬ УПРАВЛЕНИЯ</b>", reply_markup=admin_kb(), parse_mode="HTML")
+
+
+# ─── Синхронизация Google Sheets → SQLite ─────────────────────────────────────
+
+@router.callback_query(F.data == "admin_sync")
+async def sync_catalog(c: types.CallbackQuery):
+    if not is_admin(c.from_user.id):
+        return
+    await c.answer()
+    msg = await c.message.answer("⏳ Синхронизирую каталог с Google Sheets...")
+    try:
+        sheet = get_sheet()
+        rows = sheet.get_all_records()  # заголовки: name, price, description, category, photo_file_id
+        count = sync_items_from_sheet(rows)
+        await msg.edit_text(
+            f"✅ Синхронизация завершена!\n"
+            f"Загружено товаров: <b>{count}</b>",
+            reply_markup=admin_kb(),
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        await msg.edit_text(
+            f"❌ Ошибка синхронизации:\n<code>{e}</code>",
+            reply_markup=admin_kb(),
+            parse_mode="HTML",
+        )
 
 
 # ─── Добавить товар ───────────────────────────────────────────────────────────
