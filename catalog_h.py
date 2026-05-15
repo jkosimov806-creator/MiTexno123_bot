@@ -64,11 +64,10 @@ async def show_item(c: types.CallbackQuery):
         return
     text = (
         f"<b>{item['name']}</b>\n━━━━━━━━━━━━━━━\n"
-        f"🏷️ Цена: <b>{item['price']} Сомони</b>\n"
+        f"🏷️ Цена: <b>{item['price']} с.</b>\n"
         f"📂 Категория: {item['category']}\n\n"
         f"{item['description'] or ''}"
     )
-    # находим индекс категории
     from database import get_categories
     cats = get_categories()
     cat_index = cats.index(item['category']) if item['category'] in cats else 0
@@ -77,8 +76,12 @@ async def show_item(c: types.CallbackQuery):
     if item["photo"]:
         try:
             await c.message.delete()
-            await c.message.answer_photo(photo=item["photo"], caption=text,
-                                         reply_markup=kb, parse_mode="HTML")
+            await c.message.answer_photo(
+                photo=item["photo"],
+                caption=text,
+                reply_markup=kb,
+                parse_mode="HTML"
+            )
             return
         except Exception:
             pass
