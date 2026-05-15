@@ -1,7 +1,7 @@
 import sqlite3
 from contextlib import contextmanager
 
-DB_PATH = "mi_texno.db"
+DB_PATH = "DB_PATH = "/data/mi_texno.db"
 
 
 @contextmanager
