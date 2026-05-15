@@ -1,4 +1,4 @@
-from aiogram import Router, F, types
+КАТАЛОГЛОГЛОГ aiogram import Router, F, types
 from config import ITEMS_PER_PAGE
 from database import get_categories, get_items_by_category, get_item, cart_add
 from kb import categories_kb, items_kb, item_detail_kb
@@ -13,7 +13,7 @@ async def show_catalog(c: types.CallbackQuery):
         await c.answer("Каталог пока пуст 😔", show_alert=True)
         return
     await c.message.edit_text(
-        "<b>📦 КАТАЛОГ</b>\n━━━━━━━━━━━━━━━\nВыберите категорию:",
+      КАТАЛО📋КАТАЛОГ</b>\n━━━━━━━━━━━━━━━\nВыберите категорию:",
         reply_markup=categories_kb(cats), parse_mode="HTML",
     )
 
