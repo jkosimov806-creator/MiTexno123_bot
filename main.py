@@ -7,7 +7,7 @@ from aiogram.enums import ParseMode
 from aiogram.types import BotCommand
 
 from config import TOKEN
-from database import init_db, register_user, warm_cache
+from database import init_db, register_user, warm_cache, get_categories
 from kb import main_kb
 import admin_h, support_h, catalog_h, cart_h
 
@@ -34,7 +34,6 @@ async def cmd_start(message: types.Message):
 
 @dp.message(F.text == "/catalog")
 async def cmd_catalog(message: types.Message):
-    from database import get_categories
     from kb import categories_kb
     cats = get_categories()
     if not cats:
@@ -99,7 +98,11 @@ async def set_commands(bot: Bot):
 
 async def main():
     init_db()
-    warm_cache()  # загружаем все товары в память при старте
+    warm_cache()
+    cats = get_categories()
+    logging.info(f"✅ Каталог загружен: {len(cats)} категорий")
+    if not cats:
+        logging.warning("⚠️ Каталог пуст! Нажмите 'Синхронизировать каталог' в админ панели.")
     await bot.delete_webhook(drop_pending_updates=True)
     await set_commands(bot)
     await dp.start_polling(bot)
