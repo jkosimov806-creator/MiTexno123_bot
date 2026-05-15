@@ -13,7 +13,7 @@ async def show_catalog(c: types.CallbackQuery):
         await c.answer("Каталог пока пуст 😔", show_alert=True)
         return
     await c.message.edit_text(
-        "<b>📦 КАТАЛОГ</b>\n━━━━━━━━━━━━━━━\nВыберите категорию:",
+        "<b>📋 КАТАЛОГ</b>\n━━━━━━━━━━━━━━━\nВыберите категорию:",
         reply_markup=categories_kb(cats), parse_mode="HTML",
     )
 
