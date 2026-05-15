@@ -94,6 +94,39 @@ def delete_item(item_id: int):
     db_query("DELETE FROM items WHERE id = ?", (item_id,))
 
 
+# ─── Синхронизация из Google Sheets ──────────────────────────────────────────
+# Ожидаемые заголовки в таблице:
+# name | price | description | category | photo_file_id
+
+def sync_items_from_sheet(rows: list[dict]) -> int:
+    """
+    Полностью заменяет все товары в БД данными из Google Sheets.
+    Возвращает количество загруженных товаров.
+    """
+    valid = []
+    for row in rows:
+        name = str(row.get("name", "")).strip()
+        price = str(row.get("price", "")).strip()
+        if not name or not price.isdigit():
+            continue  # пропускаем пустые или кривые строки
+        valid.append((
+            name,
+            int(price),
+            str(row.get("description", "")).strip(),
+            str(row.get("category", "")).strip(),
+            str(row.get("photo_file_id", "")).strip(),
+        ))
+
+    with get_conn() as conn:
+        conn.execute("DELETE FROM items")
+        conn.executemany(
+            "INSERT INTO items (name, price, description, category, photo) VALUES (?,?,?,?,?)",
+            valid,
+        )
+
+    return len(valid)
+
+
 # ─── Cart ─────────────────────────────────────────────────────────────────────
 
 def cart_add(user_id: int, item_id: int):
