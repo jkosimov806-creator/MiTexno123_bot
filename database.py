@@ -3,6 +3,7 @@ from contextlib import contextmanager
 
 DB_PATH = "/data/mi_texno.db"
 
+
 @contextmanager
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
@@ -40,7 +41,8 @@ def init_db():
                 price       INTEGER NOT NULL,
                 description TEXT    DEFAULT '',
                 photo       TEXT    DEFAULT '',
-                category    TEXT    DEFAULT ''
+                category    TEXT    DEFAULT '',
+                stock       INTEGER DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS cart (
                 user_id INTEGER NOT NULL,
@@ -52,6 +54,12 @@ def init_db():
                 code     TEXT    PRIMARY KEY,
                 discount INTEGER NOT NULL CHECK(discount BETWEEN 1 AND 100),
                 active   INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE IF NOT EXISTS pending_orders (
+                user_id INTEGER PRIMARY KEY,
+                items   TEXT    NOT NULL,
+                total   INTEGER NOT NULL,
+                created TEXT    DEFAULT (datetime('now'))
             );
         """)
 
@@ -93,33 +101,36 @@ def delete_item(item_id: int):
     db_query("DELETE FROM items WHERE id = ?", (item_id,))
 
 
+def reduce_stock(item_id: int, qty: int):
+    db_query(
+        "UPDATE items SET stock = MAX(0, stock - ?) WHERE id = ?",
+        (qty, item_id),
+    )
+
+
 # ─── Синхронизация из Google Sheets ──────────────────────────────────────────
-# Ожидаемые заголовки в таблице:
-# name | price | description | category | photo_file_id
 
 def sync_items_from_sheet(rows: list[dict]) -> int:
-    """
-    Полностью заменяет все товары в БД данными из Google Sheets.
-    Возвращает количество загруженных товаров.
-    """
     valid = []
     for row in rows:
         name = str(row.get("name", "")).strip()
-        price = str(row.get("price", "")).strip()
-        if not name or not price.isdigit():
-            continue  # пропускаем пустые или кривые строки
-        valid.append((
-            name,
-            int(price),
-            str(row.get("description", "")).strip(),
-            str(row.get("category", "")).strip(),
-            str(row.get("photo_file_id", "")).strip(),
-        ))
+        price = str(row.get("price", "0")).strip()
+        description = str(row.get("description", "")).strip()
+        category = str(row.get("category", "")).strip()
+        photo = str(row.get("photo", "")).strip()
+        stock = str(row.get("stock", "0")).strip()
+        if not name:
+            continue
+        if not price.isdigit():
+            price = "0"
+        if not stock.isdigit():
+            stock = "0"
+        valid.append((name, int(price), description, category, photo, int(stock)))
 
     with get_conn() as conn:
         conn.execute("DELETE FROM items")
         conn.executemany(
-            "INSERT INTO items (name, price, description, category, photo) VALUES (?,?,?,?,?)",
+            "INSERT INTO items (name, price, description, category, photo, stock) VALUES (?,?,?,?,?,?)",
             valid,
         )
 
@@ -151,6 +162,25 @@ def cart_get(user_id: int):
            WHERE c.user_id = ?""",
         (user_id,), fetch=True,
     ) or []
+
+
+# ─── Pending Orders ───────────────────────────────────────────────────────────
+
+def save_pending_order(user_id: int, items_json: str, total: int):
+    db_query(
+        "INSERT OR REPLACE INTO pending_orders (user_id, items, total) VALUES (?,?,?)",
+        (user_id, items_json, total),
+    )
+
+
+def get_pending_order(user_id: int):
+    return db_query(
+        "SELECT * FROM pending_orders WHERE user_id = ?", (user_id,), fetch_one=True
+    )
+
+
+def delete_pending_order(user_id: int):
+    db_query("DELETE FROM pending_orders WHERE user_id = ?", (user_id,))
 
 
 # ─── Promos ───────────────────────────────────────────────────────────────────
