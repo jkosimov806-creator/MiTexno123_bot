@@ -3,6 +3,19 @@ from contextlib import contextmanager
 
 DB_PATH = "/data/mi_texno.db"
 
+# ─── Кэш в памяти ─────────────────────────────────────────────────────────────
+_cache_categories: list[str] = []
+_cache_items: dict[str, list] = {}
+
+
+def warm_cache():
+    global _cache_categories, _cache_items
+    rows = db_query("SELECT DISTINCT category FROM items WHERE category != ''", fetch=True)
+    _cache_categories = [r[0] for r in rows] if rows else []
+    _cache_items = {}
+    for cat in _cache_categories:
+        _cache_items[cat] = db_query("SELECT * FROM items WHERE category = ?", (cat,), fetch=True) or []
+
 
 @contextmanager
 def get_conn():
@@ -82,15 +95,15 @@ def add_item(name: str, price: int, description: str, category: str, photo: str)
         "INSERT INTO items (name, price, description, category, photo) VALUES (?,?,?,?,?)",
         (name, price, description, category, photo),
     )
+    warm_cache()
 
 
 def get_categories() -> list[str]:
-    rows = db_query("SELECT DISTINCT category FROM items WHERE category != ''", fetch=True)
-    return [r[0] for r in rows] if rows else []
+    return _cache_categories
 
 
 def get_items_by_category(category: str):
-    return db_query("SELECT * FROM items WHERE category = ?", (category,), fetch=True) or []
+    return _cache_items.get(category, [])
 
 
 def get_item(item_id: int):
@@ -99,6 +112,7 @@ def get_item(item_id: int):
 
 def delete_item(item_id: int):
     db_query("DELETE FROM items WHERE id = ?", (item_id,))
+    warm_cache()
 
 
 def reduce_stock(item_id: int, qty: int):
@@ -106,11 +120,12 @@ def reduce_stock(item_id: int, qty: int):
         "UPDATE items SET stock = MAX(0, stock - ?) WHERE id = ?",
         (qty, item_id),
     )
+    warm_cache()
 
 
 # ─── Синхронизация из Google Sheets ──────────────────────────────────────────
 
-def sync_items_from_sheet(rows: list[dict]) -> int:
+def sync_items_from_sheet(rows: list) -> int:
     valid = []
     for row in rows:
         name = str(row.get("name", "")).strip()
@@ -134,6 +149,7 @@ def sync_items_from_sheet(rows: list[dict]) -> int:
             valid,
         )
 
+    warm_cache()
     return len(valid)
 
 
