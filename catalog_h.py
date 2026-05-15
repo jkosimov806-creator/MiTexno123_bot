@@ -20,16 +20,28 @@ async def show_catalog(c: types.CallbackQuery):
 
 @router.callback_query(F.data.startswith("cat:"))
 async def show_category(c: types.CallbackQuery):
-    await _show_page(c, c.data.split(":", 1)[1], 0)
+    cat_index = int(c.data.split(":", 1)[1])
+    cats = get_categories()
+    if cat_index >= len(cats):
+        await c.answer("Категория не найдена", show_alert=True)
+        return
+    category = cats[cat_index]
+    await _show_page(c, category, cat_index, 0)
 
 
 @router.callback_query(F.data.startswith("page:"))
 async def paginate(c: types.CallbackQuery):
-    _, category, page_str = c.data.split(":", 2)
-    await _show_page(c, category, int(page_str))
+    _, cat_index_str, page_str = c.data.split(":", 2)
+    cat_index = int(cat_index_str)
+    cats = get_categories()
+    if cat_index >= len(cats):
+        await c.answer("Категория не найдена", show_alert=True)
+        return
+    category = cats[cat_index]
+    await _show_page(c, category, cat_index, int(page_str))
 
 
-async def _show_page(c: types.CallbackQuery, category: str, page: int):
+async def _show_page(c: types.CallbackQuery, category: str, cat_index: int, page: int):
     all_items = get_items_by_category(category)
     if not all_items:
         await c.answer("В этой категории нет товаров", show_alert=True)
@@ -39,7 +51,7 @@ async def _show_page(c: types.CallbackQuery, category: str, page: int):
     chunk = all_items[page * ITEMS_PER_PAGE:(page + 1) * ITEMS_PER_PAGE]
     await c.message.edit_text(
         f"<b>📂 {category}</b>\n━━━━━━━━━━━━━━━\nТоваров: {len(all_items)}",
-        reply_markup=items_kb(chunk, page, total_pages, category),
+        reply_markup=items_kb(chunk, page, total_pages, str(cat_index)),
         parse_mode="HTML",
     )
 
@@ -56,7 +68,12 @@ async def show_item(c: types.CallbackQuery):
         f"📂 Категория: {item['category']}\n\n"
         f"{item['description'] or ''}"
     )
-    kb = item_detail_kb(item["id"], item["category"])
+    # находим индекс категории
+    from database import get_categories
+    cats = get_categories()
+    cat_index = cats.index(item['category']) if item['category'] in cats else 0
+
+    kb = item_detail_kb(item["id"], str(cat_index))
     if item["photo"]:
         try:
             await c.message.delete()
