@@ -18,13 +18,14 @@ def back_main_kb() -> InlineKeyboardMarkup:
 
 def categories_kb(categories: list[str]) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    for cat in categories:
-        kb.row(InlineKeyboardButton(text=f"📂 {cat}", callback_data=f"cat:{cat}"))
+    for i, cat in enumerate(categories):
+        # используем индекс вместо названия чтобы не превысить лимит 64 символа
+        kb.row(InlineKeyboardButton(text=f"📂 {cat}", callback_data=f"cat:{i}"))
     kb.row(InlineKeyboardButton(text="⬅️ На главную", callback_data="to_main"))
     return kb.as_markup()
 
 
-def items_kb(items, page: int, total_pages: int, category: str) -> InlineKeyboardMarkup:
+def items_kb(items, page: int, total_pages: int, cat_index: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     for item in items:
         kb.row(InlineKeyboardButton(
@@ -33,22 +34,20 @@ def items_kb(items, page: int, total_pages: int, category: str) -> InlineKeyboar
         ))
     nav = []
     if page > 0:
-        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"page:{category}:{page - 1}"))
+        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"page:{cat_index}:{page - 1}"))
     nav.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
     if page < total_pages - 1:
-        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"page:{category}:{page + 1}"))
+        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"page:{cat_index}:{page + 1}"))
     if nav:
         kb.row(*nav)
     kb.row(InlineKeyboardButton(text="⬅️ Категории", callback_data="catalog"))
     return kb.as_markup()
 
 
-def item_detail_kb(item_id: int, category: str) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardButton(text="🛒 В корзину", callback_data=f"add_cart:{item_id}")
-    back = InlineKeyboardButton(text="⬅️ Назад", callback_data=f"cat:{category}")
+def item_detail_kb(item_id: int, cat_index: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(text="🛒 В корзину", callback_data=f"add_cart:{item_id}"))
-    kb.row(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"cat:{category}"))
+    kb.row(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"cat:{cat_index}"))
     return kb.as_markup()
 
 
