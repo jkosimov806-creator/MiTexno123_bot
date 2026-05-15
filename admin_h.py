@@ -3,7 +3,7 @@ from aiogram import Router, F, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from config import ADMIN_ID, SPREADSHEET_ID, CREDENTIALS_FILE, SHEET_NAME
+from config import ADMIN_ID, SPREADSHEET_ID, CREDENTIALS_FILE
 from database import add_item, delete_item, get_item, get_all_user_ids, add_promo, sync_items_from_sheet
 from kb import admin_kb
 
@@ -12,19 +12,61 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 router = Router()
 
+SHEET_NAMES = [
+    "Кондиционеры",
+    "Телевизоры",
+    "Стиральные машины",
+    "Холодильники",
+    "Очистители/увлажнители воздуха",
+    "Все для дома",
+    "Пылесосы",
+    "Гаджеты",
+    "Мониторы",
+    "Камеры",
+]
+
 
 def is_admin(user_id: int) -> bool:
     return user_id == ADMIN_ID
 
 
-def get_sheet():
+def get_all_products():
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
     ]
     creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_FILE, scope)
     client = gspread.authorize(creds)
-    return client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+    spreadsheet = client.open_by_key(SPREADSHEET_ID)
+
+    all_items = []
+    for sheet_name in SHEET_NAMES:
+        try:
+            sheet = spreadsheet.worksheet(sheet_name)
+            rows = sheet.get_all_values()
+            # строка 1 = название категории, строка 2 = заголовки, строки 3+ = товары
+            for row in rows[2:]:
+                if not row or not row[0].strip():
+                    continue
+                name = row[0].strip()
+                stock = row[1].strip() if len(row) > 1 else "0"
+                price = row[2].strip() if len(row) > 2 else "0"
+                photo = row[4].strip() if len(row) > 4 else ""
+                if not price.isdigit():
+                    price = "0"
+                if not stock.isdigit():
+                    stock = "0"
+                all_items.append({
+                    "name": name,
+                    "price": int(price),
+                    "description": f"В наличии: {stock} шт.",
+                    "category": sheet_name,
+                    "photo": photo,
+                })
+        except Exception:
+            continue
+
+    return all_items
 
 
 class AddItemState(StatesGroup):
@@ -66,9 +108,8 @@ async def sync_catalog(c: types.CallbackQuery):
     await c.answer()
     msg = await c.message.answer("⏳ Синхронизирую каталог с Google Sheets...")
     try:
-        sheet = get_sheet()
-        rows = sheet.get_all_records()  # заголовки: name, price, description, category, photo_file_id
-        count = sync_items_from_sheet(rows)
+        items = get_all_products()
+        count = sync_items_from_sheet(items)
         await msg.edit_text(
             f"✅ Синхронизация завершена!\n"
             f"Загружено товаров: <b>{count}</b>",
