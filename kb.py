@@ -4,7 +4,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 def main_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="📦 КАТАЛОГ", callback_data="catalog"))
+    kb.row(InlineKeyboardButton(text="📋 КАТАЛОГ", callback_data="catalog"))
     kb.row(InlineKeyboardButton(text="🛒 КОРЗИНА", callback_data="view_cart"))
     kb.row(InlineKeyboardButton(text="🛡 ПОДДЕРЖКА", callback_data="support"))
     return kb.as_markup()
