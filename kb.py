@@ -20,7 +20,6 @@ def categories_kb(categories: list[str]) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     for i, cat in enumerate(categories):
         kb.row(InlineKeyboardButton(text=f"📂 {cat}", callback_data=f"cat:{i}"))
-    # нижняя навигация
     kb.row(
         InlineKeyboardButton(text="🏠", callback_data="to_main"),
         InlineKeyboardButton(text="🛒", callback_data="view_cart"),
@@ -37,7 +36,6 @@ def items_kb(items, page: int, total_pages: int, cat_index: str) -> InlineKeyboa
             text=f"{name}  •  {item['price']} с.",
             callback_data=f"item:{item['id']}",
         ))
-    # навигация по страницам
     nav = []
     nav.append(InlineKeyboardButton(
         text="◀️" if page > 0 else "·",
@@ -49,7 +47,6 @@ def items_kb(items, page: int, total_pages: int, cat_index: str) -> InlineKeyboa
         callback_data=f"page:{cat_index}:{page + 1}" if page < total_pages - 1 else "noop"
     ))
     kb.row(*nav)
-    # нижняя навигация
     kb.row(
         InlineKeyboardButton(text="🏠", callback_data="to_main"),
         InlineKeyboardButton(text="⬅️", callback_data="catalog"),
@@ -62,7 +59,6 @@ def items_kb(items, page: int, total_pages: int, cat_index: str) -> InlineKeyboa
 def item_detail_kb(item_id: int, cat_index: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(text="🛒 В корзину", callback_data=f"add_cart:{item_id}"))
-    # нижняя навигация
     kb.row(
         InlineKeyboardButton(text="🏠", callback_data="to_main"),
         InlineKeyboardButton(text="⬅️", callback_data=f"cat:{cat_index}"),
@@ -80,7 +76,6 @@ def cart_kb(has_items: bool) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="🏷 Промокод", callback_data="apply_promo"),
             InlineKeyboardButton(text="🗑 Очистить", callback_data="clear_cart"),
         )
-    # нижняя навигация
     kb.row(
         InlineKeyboardButton(text="🏠", callback_data="to_main"),
         InlineKeyboardButton(text="📋", callback_data="catalog"),
