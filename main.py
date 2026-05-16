@@ -96,31 +96,32 @@ async def set_commands(bot: Bot):
     await bot.set_my_commands(commands)
 
 
-async def auto_sync():
-    """Автосинхронизация при старте если каталог пустой"""
+async def do_sync():
+    """Синхронизация каталога из Google Sheets"""
     try:
         from admin_h import get_all_products
         from database import sync_items_from_sheet
+        logging.info("🔄 Синхронизация каталога из Google Sheets...")
         items = get_all_products()
         if items:
-            sync_items_from_sheet(items)
-            logging.info(f"✅ Автосинхронизация: загружено {len(items)} товаров")
+            count = sync_items_from_sheet(items)
+            logging.info(f"✅ Загружено товаров: {count}")
         else:
-            logging.warning("⚠️ Автосинхронизация: товары не найдены в таблице")
+            logging.warning("⚠️ Google Sheets вернул пустой список")
+            warm_cache()
     except Exception as e:
-        logging.error(f"❌ Ошибка автосинхронизации: {e}")
+        logging.error(f"❌ Ошибка синхронизации: {e}")
+        warm_cache()
 
 
 async def main():
     init_db()
-    warm_cache()
+
+    # всегда синхронизируем при старте
+    await do_sync()
 
     cats = get_categories()
-    logging.info(f"📦 Каталог в БД: {len(cats)} категорий")
-
-    if not cats:
-        logging.info("🔄 Каталог пуст — запускаю автосинхронизацию из Google Sheets...")
-        await auto_sync()
+    logging.info(f"📦 Готово: {len(cats)} категорий в кэше")
 
     await bot.delete_webhook(drop_pending_updates=True)
     await set_commands(bot)
