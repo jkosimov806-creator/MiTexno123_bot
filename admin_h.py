@@ -44,7 +44,6 @@ def get_all_products():
         try:
             sheet = spreadsheet.worksheet(sheet_name)
             rows = sheet.get_all_values()
-            # строка 1 = название категории, строка 2 = заголовки, строки 3+ = товары
             for row in rows[2:]:
                 if not row or not row[0].strip():
                     continue
@@ -62,10 +61,10 @@ def get_all_products():
                     "description": f"В наличии: {stock} шт.",
                     "category": sheet_name,
                     "photo": photo,
+                    "stock": int(stock),
                 })
         except Exception:
             continue
-
     return all_items
 
 
@@ -90,16 +89,12 @@ class DelItemState(StatesGroup):
     item_id = State()
 
 
-# ─── Панель ───────────────────────────────────────────────────────────────────
-
 @router.message(Command("admin"))
 async def admin_panel(m: types.Message):
     if not is_admin(m.from_user.id):
         return
     await m.answer("<b>🛠 ПАНЕЛЬ УПРАВЛЕНИЯ</b>", reply_markup=admin_kb(), parse_mode="HTML")
 
-
-# ─── Синхронизация Google Sheets → SQLite ─────────────────────────────────────
 
 @router.callback_query(F.data == "admin_sync")
 async def sync_catalog(c: types.CallbackQuery):
@@ -111,20 +106,15 @@ async def sync_catalog(c: types.CallbackQuery):
         items = get_all_products()
         count = sync_items_from_sheet(items)
         await msg.edit_text(
-            f"✅ Синхронизация завершена!\n"
-            f"Загружено товаров: <b>{count}</b>",
-            reply_markup=admin_kb(),
-            parse_mode="HTML",
+            f"✅ Синхронизация завершена!\nЗагружено товаров: <b>{count}</b>",
+            reply_markup=admin_kb(), parse_mode="HTML",
         )
     except Exception as e:
         await msg.edit_text(
             f"❌ Ошибка синхронизации:\n<code>{e}</code>",
-            reply_markup=admin_kb(),
-            parse_mode="HTML",
+            reply_markup=admin_kb(), parse_mode="HTML",
         )
 
-
-# ─── Добавить товар ───────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "admin_add_item")
 async def ad_start(c: types.CallbackQuery, state: FSMContext):
@@ -176,8 +166,6 @@ async def ad_photo_wrong(m: types.Message):
     await m.answer("❌ Нужно прислать фото.")
 
 
-# ─── Удалить товар ────────────────────────────────────────────────────────────
-
 @router.callback_query(F.data == "admin_del_item")
 async def del_start(c: types.CallbackQuery, state: FSMContext):
     if not is_admin(c.from_user.id): return
@@ -197,8 +185,6 @@ async def del_do(m: types.Message, state: FSMContext):
     await m.answer(f"✅ Товар «{item['name']}» удалён.", reply_markup=admin_kb())
     await state.clear()
 
-
-# ─── Промокод ─────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "admin_add_promo")
 async def promo_start(c: types.CallbackQuery, state: FSMContext):
@@ -223,8 +209,6 @@ async def promo_discount(m: types.Message, state: FSMContext):
     await m.answer(f"✅ Промокод <b>{data['code']}</b> на {m.text}% создан!", reply_markup=admin_kb(), parse_mode="HTML")
     await state.clear()
 
-
-# ─── Рассылка ─────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "admin_broadcast")
 async def br_start(c: types.CallbackQuery, state: FSMContext):
