@@ -105,8 +105,6 @@ async def handle_promo(m: types.Message, state: FSMContext):
     await m.answer(text, reply_markup=cart_kb(has_items=True), parse_mode="HTML")
 
 
-# ─── Оформление заказа ────────────────────────────────────────────────────────
-
 @router.callback_query(F.data == "checkout")
 async def checkout(c: types.CallbackQuery, state: FSMContext):
     items = cart_get(c.from_user.id)
@@ -116,8 +114,7 @@ async def checkout(c: types.CallbackQuery, state: FSMContext):
     await c.message.edit_text(
         "💳 <b>Выберите способ оплаты:</b>\n━━━━━━━━━━━━━━━\n"
         "После выбора банка вам будут показаны реквизиты для оплаты.",
-        reply_markup=banks_kb(),
-        parse_mode="HTML",
+        reply_markup=banks_kb(), parse_mode="HTML",
     )
 
 
@@ -126,7 +123,6 @@ async def choose_bank(c: types.CallbackQuery, state: FSMContext):
     bank_key = c.data.split(":")[1]
     bank_label, bank_name = BANKS.get(bank_key, ("", ""))
     await state.update_data(bank=bank_name)
-
     await c.message.edit_text(
         f"{bank_label} <b>{bank_name}</b>\n━━━━━━━━━━━━━━━\n"
         f"📱 Номер для перевода:\n"
@@ -152,8 +148,6 @@ async def get_address(m: types.Message, state: FSMContext):
 @router.message(CartState.phone)
 async def get_phone(m: types.Message, state: FSMContext):
     phone = m.text.strip().replace(" ", "").replace("-", "")
-
-    # проверка формата +992XXXXXXXXX
     if not (phone.startswith("+992") and len(phone) == 13 and phone[1:].isdigit()):
         await m.answer(
             "❌ Неверный формат номера!\n"
@@ -164,15 +158,10 @@ async def get_phone(m: types.Message, state: FSMContext):
 
     data = await state.get_data()
     await state.update_data(phone=phone)
-
     items = cart_get(m.from_user.id)
     _, total = _cart_text(items, data.get("promo_discount", 0))
+    order_lines = "\n".join(f"  • {r['name']} × {r['qty']} = {r['subtotal']} с." for r in items)
 
-    order_lines = "\n".join(
-        f"  • {r['name']} × {r['qty']} = {r['subtotal']} с." for r in items
-    )
-
-    # показываем итог заказа клиенту
     await m.answer(
         f"📋 <b>Ваш заказ:</b>\n━━━━━━━━━━━━━━━\n"
         f"{order_lines}\n━━━━━━━━━━━━━━━\n"
@@ -184,7 +173,6 @@ async def get_phone(m: types.Message, state: FSMContext):
         parse_mode="HTML",
     )
 
-    # отправляем заказ админу
     import json
     order_data = [(r['id'], r['qty']) for r in items]
     save_pending_order(m.from_user.id, json.dumps(order_data), total)
@@ -192,7 +180,6 @@ async def get_phone(m: types.Message, state: FSMContext):
     from config import ADMIN_ID
     user = m.from_user
     username = f"@{user.username}" if user.username else f"ID: {user.id}"
-
     try:
         await m.bot.send_message(
             ADMIN_ID,
@@ -214,38 +201,26 @@ async def get_phone(m: types.Message, state: FSMContext):
     await state.clear()
 
 
-# ─── Подтверждение заказа админом ─────────────────────────────────────────────
-
 @router.callback_query(F.data.startswith("order_confirm:"))
 async def order_confirm(c: types.CallbackQuery):
     user_id = int(c.data.split(":")[1])
     import json
-
     order = get_pending_order(user_id)
     if not order:
         await c.answer("Заказ не найден или уже обработан", show_alert=True)
         return
-
-    items = json.loads(order["items"])
-    for item_id, qty in items:
+    for item_id, qty in json.loads(order["items"]):
         reduce_stock(item_id, qty)
-
     delete_pending_order(user_id)
-
     try:
         await c.bot.send_message(
             user_id,
-            "✅ <b>Ваш заказ подтверждён!</b>\n"
-            "Менеджер свяжется с вами в ближайшее время.",
+            "✅ <b>Ваш заказ подтверждён!</b>\nМенеджер свяжется с вами в ближайшее время.",
             parse_mode="HTML",
         )
     except Exception:
         pass
-
-    await c.message.edit_text(
-        c.message.text + "\n\n✅ <b>Заказ подтверждён</b>",
-        parse_mode="HTML",
-    )
+    await c.message.edit_text(c.message.text + "\n\n✅ <b>Заказ подтверждён</b>", parse_mode="HTML")
     await c.answer("✅ Заказ подтверждён, остатки обновлены!")
 
 
@@ -253,19 +228,13 @@ async def order_confirm(c: types.CallbackQuery):
 async def order_cancel(c: types.CallbackQuery):
     user_id = int(c.data.split(":")[1])
     delete_pending_order(user_id)
-
     try:
         await c.bot.send_message(
             user_id,
-            "❌ <b>Ваш заказ отменён.</b>\n"
-            "Свяжитесь с менеджером для уточнения.",
+            "❌ <b>Ваш заказ отменён.</b>\nСвяжитесь с менеджером для уточнения.",
             parse_mode="HTML",
         )
     except Exception:
         pass
-
-    await c.message.edit_text(
-        c.message.text + "\n\n❌ <b>Заказ отменён</b>",
-        parse_mode="HTML",
-    )
+    await c.message.edit_text(c.message.text + "\n\n❌ <b>Заказ отменён</b>", parse_mode="HTML")
     await c.answer("Заказ отменён")
