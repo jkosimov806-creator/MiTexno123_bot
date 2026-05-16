@@ -96,13 +96,32 @@ async def set_commands(bot: Bot):
     await bot.set_my_commands(commands)
 
 
+async def auto_sync():
+    """Автосинхронизация при старте если каталог пустой"""
+    try:
+        from admin_h import get_all_products
+        from database import sync_items_from_sheet
+        items = get_all_products()
+        if items:
+            sync_items_from_sheet(items)
+            logging.info(f"✅ Автосинхронизация: загружено {len(items)} товаров")
+        else:
+            logging.warning("⚠️ Автосинхронизация: товары не найдены в таблице")
+    except Exception as e:
+        logging.error(f"❌ Ошибка автосинхронизации: {e}")
+
+
 async def main():
     init_db()
     warm_cache()
+
     cats = get_categories()
-    logging.info(f"✅ Каталог загружен: {len(cats)} категорий")
+    logging.info(f"📦 Каталог в БД: {len(cats)} категорий")
+
     if not cats:
-        logging.warning("⚠️ Каталог пуст! Нажмите 'Синхронизировать каталог' в админ панели.")
+        logging.info("🔄 Каталог пуст — запускаю автосинхронизацию из Google Sheets...")
+        await auto_sync()
+
     await bot.delete_webhook(drop_pending_updates=True)
     await set_commands(bot)
     await dp.start_polling(bot)
@@ -110,15 +129,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-cats = get_categories()
-if not cats:
-    logging.warning("Каталог пуст — запускаю автосинхронизацию...")
-    try:
-        from admin_h import get_all_products
-        from database import sync_items_from_sheet
-        items = get_all_products()
-        sync_items_from_sheet(items)
-        logging.info(f"Автосинхронизация: загружено {len(items)} товаров")
-    except Exception as e:
-        logging.error(f"Ошибка автосинхронизации: {e}")
