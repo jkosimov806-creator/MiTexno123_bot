@@ -10,10 +10,10 @@ router = Router()
 async def show_catalog(c: types.CallbackQuery):
     cats = get_categories()
     if not cats:
-        await c.answer("Каталог пока пуст 😔", show_alert=True)
+        await c.answer("⏳ Каталог загружается, попробуйте через секунду", show_alert=True)
         return
     await c.message.edit_text(
-        "<b>📋 КАТАЛОГ</b>\n━━━━━━━━━━━━━━━\nВыберите категорию:",
+        "✦ <b>КАТАЛОГ</b>\n─────────────────\nВыберите категорию",
         reply_markup=categories_kb(cats), parse_mode="HTML",
     )
 
@@ -42,13 +42,13 @@ async def paginate(c: types.CallbackQuery):
 async def _show_page(c: types.CallbackQuery, category: str, cat_index: int, page: int):
     all_items = get_items_by_category(category)
     if not all_items:
-        await c.answer("В этой категории нет товаров", show_alert=True)
+        await c.answer("В этой категории пока нет товаров", show_alert=True)
         return
     total_pages = max(1, -(-len(all_items) // ITEMS_PER_PAGE))
     page = max(0, min(page, total_pages - 1))
     chunk = all_items[page * ITEMS_PER_PAGE:(page + 1) * ITEMS_PER_PAGE]
     await c.message.edit_text(
-        f"<b>📂 {category}</b>\n━━━━━━━━━━━━━━━\nТоваров: {len(all_items)}",
+        f"✦ <b>{category.upper()}</b>\n─────────────────\n{len(all_items)} товаров",
         reply_markup=items_kb(chunk, page, total_pages, str(cat_index)),
         parse_mode="HTML",
     )
@@ -64,9 +64,9 @@ async def show_item(c: types.CallbackQuery):
     cats = get_categories()
     cat_index = cats.index(item['category']) if item['category'] in cats else 0
     text = (
-        f"<b>{item['name']}</b>\n━━━━━━━━━━━━━━━\n"
-        f"🏷️ Цена: <b>{item['price']} с.</b>\n"
-        f"📂 Категория: {item['category']}\n\n"
+        f"<b>{item['name']}</b>\n"
+        f"─────────────────\n"
+        f"💎 <b>{item['price']} с.</b>\n\n"
         f"{item['description'] or ''}"
     )
     kb = item_detail_kb(item["id"], str(cat_index))
@@ -90,7 +90,7 @@ async def add_to_cart(c: types.CallbackQuery):
         await c.answer("Товар не найден", show_alert=True)
         return
     cart_add(c.from_user.id, item["id"])
-    await c.answer(f"✅ «{item['name']}» добавлен в корзину!")
+    await c.answer(f"✅ Добавлено в корзину")
 
 
 @router.callback_query(F.data == "noop")
