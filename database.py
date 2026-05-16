@@ -9,19 +9,6 @@ _cache_items: dict[str, list] = {}
 _cache_items_by_id: dict[int, object] = {}
 
 
-def warm_cache():
-    global _cache_categories, _cache_items, _cache_items_by_id
-    rows = db_query("SELECT DISTINCT category FROM items WHERE category != ''", fetch=True)
-    _cache_categories = [r[0] for r in rows] if rows else []
-    _cache_items = {}
-    _cache_items_by_id = {}
-    for cat in _cache_categories:
-        items = db_query("SELECT * FROM items WHERE category = ?", (cat,), fetch=True) or []
-        _cache_items[cat] = items
-        for item in items:
-            _cache_items_by_id[item["id"]] = item
-
-
 @contextmanager
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
@@ -44,6 +31,19 @@ def db_query(sql: str, params: tuple = (), *, fetch=False, fetch_one=False):
             return cur.fetchone()
         if fetch:
             return cur.fetchall()
+
+
+def warm_cache():
+    global _cache_categories, _cache_items, _cache_items_by_id
+    rows = db_query("SELECT DISTINCT category FROM items WHERE category != ''", fetch=True)
+    _cache_categories = [r[0] for r in rows] if rows else []
+    _cache_items = {}
+    _cache_items_by_id = {}
+    for cat in _cache_categories:
+        items = db_query("SELECT * FROM items WHERE category = ?", (cat,), fetch=True) or []
+        _cache_items[cat] = items
+        for item in items:
+            _cache_items_by_id[item["id"]] = item
 
 
 def init_db():
@@ -80,21 +80,14 @@ def init_db():
                 created TEXT    DEFAULT (datetime('now'))
             );
         """)
-    # миграция — добавляем stock если колонки нет
-    try:
-        db_query("ALTER TABLE items ADD COLUMN stock INTEGER DEFAULT 0")
-    except Exception:
-        pass  # колонка уже есть
-    # миграция — добавляем pending_orders если таблицы нет
-    try:
-        db_query("""CREATE TABLE IF NOT EXISTS pending_orders (
-            user_id INTEGER PRIMARY KEY,
-            items   TEXT    NOT NULL,
-            total   INTEGER NOT NULL,
-            created TEXT    DEFAULT (datetime('now'))
-        )""")
-    except Exception:
-        pass
+    # миграции для старых БД
+    for sql in [
+        "ALTER TABLE items ADD COLUMN stock INTEGER DEFAULT 0",
+    ]:
+        try:
+            db_query(sql)
+        except Exception:
+            pass
 
 
 # ─── Users ────────────────────────────────────────────────────────────────────
@@ -110,6 +103,20 @@ def get_all_user_ids() -> list[int]:
 
 # ─── Items ────────────────────────────────────────────────────────────────────
 
+def get_categories() -> list[str]:
+    return _cache_categories
+
+
+def get_items_by_category(category: str) -> list:
+    return _cache_items.get(category, [])
+
+
+def get_item(item_id: int):
+    return _cache_items_by_id.get(item_id) or db_query(
+        "SELECT * FROM items WHERE id = ?", (item_id,), fetch_one=True
+    )
+
+
 def add_item(name: str, price: int, description: str, category: str, photo: str):
     db_query(
         "INSERT INTO items (name, price, description, category, photo) VALUES (?,?,?,?,?)",
@@ -118,34 +125,15 @@ def add_item(name: str, price: int, description: str, category: str, photo: str)
     warm_cache()
 
 
-def get_categories() -> list[str]:
-    return _cache_categories
-
-
-def get_items_by_category(category: str):
-    return _cache_items.get(category, [])
-
-
-def get_item(item_id: int):
-    if item_id in _cache_items_by_id:
-        return _cache_items_by_id[item_id]
-    return db_query("SELECT * FROM items WHERE id = ?", (item_id,), fetch_one=True)
-
-
 def delete_item(item_id: int):
     db_query("DELETE FROM items WHERE id = ?", (item_id,))
     warm_cache()
 
 
 def reduce_stock(item_id: int, qty: int):
-    db_query(
-        "UPDATE items SET stock = MAX(0, stock - ?) WHERE id = ?",
-        (qty, item_id),
-    )
+    db_query("UPDATE items SET stock = MAX(0, stock - ?) WHERE id = ?", (qty, item_id))
     warm_cache()
 
-
-# ─── Синхронизация из Google Sheets ──────────────────────────────────────────
 
 def sync_items_from_sheet(rows: list) -> int:
     valid = []
@@ -170,7 +158,6 @@ def sync_items_from_sheet(rows: list) -> int:
             "INSERT INTO items (name, price, description, category, photo, stock) VALUES (?,?,?,?,?,?)",
             valid,
         )
-
     warm_cache()
     return len(valid)
 
