@@ -80,6 +80,21 @@ def init_db():
                 created TEXT    DEFAULT (datetime('now'))
             );
         """)
+    # миграция — добавляем stock если колонки нет
+    try:
+        db_query("ALTER TABLE items ADD COLUMN stock INTEGER DEFAULT 0")
+    except Exception:
+        pass  # колонка уже есть
+    # миграция — добавляем pending_orders если таблицы нет
+    try:
+        db_query("""CREATE TABLE IF NOT EXISTS pending_orders (
+            user_id INTEGER PRIMARY KEY,
+            items   TEXT    NOT NULL,
+            total   INTEGER NOT NULL,
+            created TEXT    DEFAULT (datetime('now'))
+        )""")
+    except Exception:
+        pass
 
 
 # ─── Users ────────────────────────────────────────────────────────────────────
@@ -112,10 +127,8 @@ def get_items_by_category(category: str):
 
 
 def get_item(item_id: int):
-    # сначала ищем в кэше — быстро
     if item_id in _cache_items_by_id:
         return _cache_items_by_id[item_id]
-    # если нет в кэше — идём в БД
     return db_query("SELECT * FROM items WHERE id = ?", (item_id,), fetch_one=True)
 
 
