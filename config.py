@@ -4,5 +4,5 @@ SUPPORT_USERNAME = "@Mi_Texn0"
 ITEMS_PER_PAGE = 5
 
 SPREADSHEET_ID = "1DZ8GE-1psAyCCpaPwn5ISuCjg6eSL6RHL547GUpolow"
-CREDENTIALS_FILE = "/app/credentials.json"
+CREDENTIALS_FILE = "credentials.json"
 SHEET_NAME = "Sheet1"
