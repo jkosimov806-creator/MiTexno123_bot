@@ -10,14 +10,15 @@ async def support_info(c: types.CallbackQuery):
     await c.answer()
     kb = InlineKeyboardBuilder()
     kb.button(text="💬 Написать менеджеру", url=f"https://t.me/{SUPPORT_USERNAME.lstrip('@')}")
-    kb.button(text="⬅️ На главную", callback_data="to_main")
+    kb.button(text="🏠 На главную", callback_data="to_main")
     kb.adjust(1)
     text = (
-        "<b>🛡 СЛУЖБА ПОДДЕРЖКИ MI TEXNO</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "Наши специалисты помогут с выбором и оформлением заказа.\n\n"
-        f"👉 Менеджер: {SUPPORT_USERNAME}\n"
-        "🕐 Работаем: 9:00 – 19:00"
+        "✦ <b>ПОДДЕРЖКА</b>\n"
+        "─────────────────\n"
+        "Готовы помочь с выбором\n"
+        "и оформлением заказа\n\n"
+        f"👤 {SUPPORT_USERNAME}\n"
+        "🕐 Пн–Сб · 9:00 – 19:00"
     )
     try:
         await c.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
