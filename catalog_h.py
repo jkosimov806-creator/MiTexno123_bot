@@ -1,30 +1,14 @@
 from aiogram import Router, F, types
 from config import ITEMS_PER_PAGE
-from database import get_categories, get_items_by_category, get_item, cart_add, warm_cache, db_query
+from database import get_categories, get_items_by_category, get_item, cart_add
 from kb import categories_kb, items_kb, item_detail_kb
 
 router = Router()
 
 
-def _get_cats():
-    cats = get_categories()
-    if not cats:
-        warm_cache()
-        cats = get_categories()
-    return cats
-
-
-def _get_items(category: str):
-    items = get_items_by_category(category)
-    if not items:
-        warm_cache()
-        items = get_items_by_category(category)
-    return items
-
-
 @router.callback_query(F.data == "catalog")
 async def show_catalog(c: types.CallbackQuery):
-    cats = _get_cats()
+    cats = get_categories()
     if not cats:
         await c.answer("Каталог пока пуст 😔", show_alert=True)
         return
@@ -37,28 +21,26 @@ async def show_catalog(c: types.CallbackQuery):
 @router.callback_query(F.data.startswith("cat:"))
 async def show_category(c: types.CallbackQuery):
     cat_index = int(c.data.split(":", 1)[1])
-    cats = _get_cats()
+    cats = get_categories()
     if cat_index >= len(cats):
         await c.answer("Категория не найдена", show_alert=True)
         return
-    category = cats[cat_index]
-    await _show_page(c, category, cat_index, 0)
+    await _show_page(c, cats[cat_index], cat_index, 0)
 
 
 @router.callback_query(F.data.startswith("page:"))
 async def paginate(c: types.CallbackQuery):
     _, cat_index_str, page_str = c.data.split(":", 2)
     cat_index = int(cat_index_str)
-    cats = _get_cats()
+    cats = get_categories()
     if cat_index >= len(cats):
         await c.answer("Категория не найдена", show_alert=True)
         return
-    category = cats[cat_index]
-    await _show_page(c, category, cat_index, int(page_str))
+    await _show_page(c, cats[cat_index], cat_index, int(page_str))
 
 
 async def _show_page(c: types.CallbackQuery, category: str, cat_index: int, page: int):
-    all_items = _get_items(category)
+    all_items = get_items_by_category(category)
     if not all_items:
         await c.answer("В этой категории нет товаров", show_alert=True)
         return
@@ -77,29 +59,23 @@ async def show_item(c: types.CallbackQuery):
     item_id = int(c.data.split(":")[1])
     item = get_item(item_id)
     if not item:
-        warm_cache()
-        item = get_item(item_id)
-    if not item:
         await c.answer("Товар не найден", show_alert=True)
         return
+    cats = get_categories()
+    cat_index = cats.index(item['category']) if item['category'] in cats else 0
     text = (
         f"<b>{item['name']}</b>\n━━━━━━━━━━━━━━━\n"
         f"🏷️ Цена: <b>{item['price']} с.</b>\n"
         f"📂 Категория: {item['category']}\n\n"
         f"{item['description'] or ''}"
     )
-    cats = _get_cats()
-    cat_index = cats.index(item['category']) if item['category'] in cats else 0
-
     kb = item_detail_kb(item["id"], str(cat_index))
     if item["photo"]:
         try:
             await c.message.delete()
             await c.message.answer_photo(
-                photo=item["photo"],
-                caption=text,
-                reply_markup=kb,
-                parse_mode="HTML"
+                photo=item["photo"], caption=text,
+                reply_markup=kb, parse_mode="HTML"
             )
             return
         except Exception:
